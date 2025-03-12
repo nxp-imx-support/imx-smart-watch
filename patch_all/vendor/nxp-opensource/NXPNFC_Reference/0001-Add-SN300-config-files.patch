@@ -1,0 +1,1332 @@
+From 6c208e67f8076ad1b47cd6b3add88162c478802f Mon Sep 17 00:00:00 2001
+From: Jason He <jason.he_1@nxp.com>
+Date: Fri, 9 Aug 2024 11:54:32 +0900
+Subject: [PATCH 1/3] Add SN300 config files
+
+Signed-off-by: Jason He <jason.he_1@nxp.com>
+---
+ .../fmct-config-files/libese-nxp-P73.conf     |  99 ++++
+ .../SN300/fmct-config-files/libnfc-nci.conf   | 105 ++++
+ .../libnfc-nxp-SN300U_example.conf            | 538 ++++++++++++++++++
+ .../libnfc-nxp_AndroidOne.conf                | 471 +++++++++++++++
+ .../libnfc-nxp_RF-SN300U_example.conf         |  67 +++
+ 5 files changed, 1280 insertions(+)
+ create mode 100644 nxp/SNxxx/hw/SN300/fmct-config-files/libese-nxp-P73.conf
+ create mode 100644 nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nci.conf
+ create mode 100644 nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp-SN300U_example.conf
+ create mode 100644 nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_AndroidOne.conf
+ create mode 100644 nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_RF-SN300U_example.conf
+
+diff --git a/nxp/SNxxx/hw/SN300/fmct-config-files/libese-nxp-P73.conf b/nxp/SNxxx/hw/SN300/fmct-config-files/libese-nxp-P73.conf
+new file mode 100644
+index 0000000..a88df74
+--- /dev/null
++++ b/nxp/SNxxx/hw/SN300/fmct-config-files/libese-nxp-P73.conf
+@@ -0,0 +1,99 @@
++##This file needs to be pushed into /vendor/etc/libese-nxp.conf
++
++###############################################################################
++# Log level for SE HAL
++# LOG_LEVEL_SILENT 0x00
++# LOG_LEVEL_ERROR  0x01
++# LOG_LEVEL_WARN   0x02
++# LOG_LEVEL_INFO   0x03
++# LOG_LEVEL_DEBUG  0x04
++
++SE_LOG_LEVEL=0x04
++
++# Enable/Disable printing TX/RX time duration in logs
++# Disable 0
++# Enable  1
++SE_KPI_MEASUREMENT_ENABLED=0
++
++#WTX Count in secs
++NXP_WTX_COUNT_VALUE=30
++
++#Max WTX Count in OSU mode in secs
++NXP_OSU_MAX_WTX_COUNT=60
++
++#Delay(us) to recover if invalid data received
++RNACK_RETRY_DELAY=7000
++
++# PN67T_PWR_SCHEME          0x01
++# PN80T_LEGACY_PWR_SCHEME   0x02
++# PN80T_EXT_PMU_SCHEME      0x03
++NXP_POWER_SCHEME=0x02
++
++# For SOF = 0x5A            0x01
++# For SOF = 0x00            0x02
++NXP_SOF_WRITE=0x01
++
++#SPI Throughput measurement log enabled(1)/disabled(0) in kernel
++NXP_TP_MEASUREMENT=0x00
++
++#Enable/Disable interface reset as part of SPI open
++NXP_SPI_INTF_RST_ENABLE=0x01
++
++#Wait extension call back notification count to notify(In secs)
++NXP_WTX_NTF_COUNT=0x03
++
++###############################################################################
++# SPI WRITE TIMEOUT for RF event synchronization
++NXP_SPI_WRITE_TIMEOUT=0x14
++
++###############################################################################
++# SPI Device Node name
++NXP_ESE_DEV_NODE="/dev/p73"
++
++#MAX NO OF R_NACK RETRY ALLOWED IN CASE OF CRC FAILURE
++NXP_MAX_RNACK_RETRY=0x03
++NXP_VISO_DPD_ENABLED=0x01
++#NXP_NAD_POLL_RETRY_TIME is in 100's of us
++# e.g. 0x05 --> 500 us delay
++NXP_NAD_POLL_RETRY_TIME=0x03
++###############################################################################
++# IFS adjustment configuration value of IFSD for eSE
++# Any value set which is greater than IFSC value will be R-NACKed from JCOP
++# Default IFSC: 0x01FA = (0x0200 - 0x6(header))(As agreed with JCOP)
++#
++NXP_ESE_IFSD_VALUE=0x0200
++
++###############################################################################
++# IFS adjustment configuration value of IFSD for eUICC
++# Any value set which is greater than IFSC value will be R-NACKed from JCOP
++# Default IFSC: 0x01FA = (0x0200 - 0x6(header))(As agreed with JCOP)
++#
++NXP_EUICC_IFSD_VALUE=0x0200
++
++###############################################################################
++# Interface to perform the eSE cold reset
++# Possible value can be 0x00 or 0x01
++# 0x00 = ESE_HAL
++# 0x01 = NFC_HAL
++NXP_P61_COLD_RESET_INTERFACE=0x00
++
++###############################################################################
++# Config to choose GPIO based eSE reset using eSE Driver
++# Possible value can be 0x00 or 0x01
++# 0x00 = Fallback to eSE Cold reset i.e. NXP_P61_COLD_RESET_INTERFACE
++# 0x01 = eSE reset type GPIO
++NXP_ESE_GPIO_RESET=0x01
++
++###############################################################################
++# Identify the CHIP/OS version for which this config file is targeted
++# Possible value can be as below
++# 0x01       = PN8x variant
++# 0x00       = SNxxx or higher variant derived from ATR info
++NXP_OS_VERSION=0x00
++
++###############################################################################
++# Reserve Logical channel for priority access operations such as weaver HAL
++# for device lock/unlock operation.
++# 0x00 = Disabled
++# 0x01 = Enabled
++NXP_SE_PRIORITY_ACCESS=1
+diff --git a/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nci.conf b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nci.conf
+new file mode 100644
+index 0000000..568a32f
+--- /dev/null
++++ b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nci.conf
+@@ -0,0 +1,105 @@
++########################## Start of libnfc-nci.conf ###########################
++###############################################################################
++# Application options
++NFC_DEBUG_ENABLED=1
++###############################################################################
++# performance measurement
++# Change this setting to control how often USERIAL log the performance (throughput)
++# data on read/write/poll
++# defailt is to log performance dara for every 100 read or write
++#REPORT_PERFORMANCE_MEASURE=100
++###############################################################################
++# File used for NFA storage
++NFA_STORAGE="/data/nfc"
++###############################################################################
++## Default poll duration (in ms)
++## The default is 500ms if not set
++NFA_DM_DISC_DURATION_POLL=500
++
++###############################################################################
++# Force UICC to only listen to the following technology(s).
++# The bits are defined as tNFA_TECHNOLOGY_MASK in nfa_api.h.
++# Default is NFA_TECHNOLOGY_MASK_A | NFA_TECHNOLOGY_MASK_B | NFA_TECHNOLOGY_MASK_F
++UICC_LISTEN_TECH_MASK=0x07
++
++###############################################################################
++# When screen is turned off, specify the desired power state of the controller.
++# 0: power-off-sleep state; DEFAULT
++# 1: full-power state
++# 2: screen-off card-emulation (CE4/CE3/CE1 modes are used)
++SCREEN_OFF_POWER_STATE=1
++###############################################################################
++# Force tag polling for the following technology(s).
++# The bits are defined as tNFA_TECHNOLOGY_MASK in nfa_api.h.
++# Default is NFA_TECHNOLOGY_MASK_A | NFA_TECHNOLOGY_MASK_B |
++#            NFA_TECHNOLOGY_MASK_F | NFA_TECHNOLOGY_MASK_ISO15693 |
++#            NFA_TECHNOLOGY_MASK_B_PRIME |
++#            NFA_TECHNOLOGY_MASK_A_ACTIVE | NFA_TECHNOLOGY_MASK_F_ACTIVE.
++#
++# Notable bits:
++# NFA_TECHNOLOGY_MASK_A             0x01    /* NFC Technology A             */
++# NFA_TECHNOLOGY_MASK_B             0x02    /* NFC Technology B             */
++# NFA_TECHNOLOGY_MASK_F             0x04    /* NFC Technology F             */
++# NFA_TECHNOLOGY_MASK_ISO15693      0x08    /* Proprietary Technology       */
++POLLING_TECH_MASK=0x0F
++
++###############################################################################
++PRESERVE_STORAGE=0x01
++###############################################################################
++# Override the stack default for NFA_EE_MAX_EE_SUPPORTED set in nfc_target.h.
++# The value is set to 3 by default as it assumes we will discover 0xF2,
++# 0xF3, and 0xF4. If a platform will exclude and SE, this value can be reduced
++# so that the stack will not wait any longer than necessary.
++
++# Maximum EE supported number
++# NXP PN547C2 0x02
++# NXP PN65T 0x03
++# NXP PN548C2 0x02
++# NXP PN66T 0x03
++NFA_MAX_EE_SUPPORTED=0x03
++##############################################################################
++# Deactivate notification wait time out in seconds used in ETSI Reader mode
++# 0 - Infinite wait
++NFA_DM_DISC_NTF_TIMEOUT=0
++
++###############################################################################
++# AID_MATCHING constants
++# AID_MATCHING_EXACT_ONLY 0x00
++# AID_MATCHING_EXACT_OR_PREFIX 0x01
++# AID_MATCHING_PREFIX_ONLY 0x02
++#AID_MATCHING_EXACT_OR_SUBSET_OR_PREFIX 0x03
++AID_MATCHING_MODE=0x03
++
++###############################################################################
++# NCI_RESET_TYPE options
++# Default 0x00, reset configurations everytime.
++# 0x01, reset configurations only once every boot.
++# 0x02, keep configurations.
++NCI_RESET_TYPE=0x02
++
++################################################################################
++#Set bit to 1 , block list is enabled
++#Set bit to 0,  to disable block list
++NFA_AID_BLOCK_ROUTE=0x00
++
++###############################################################################
++#Set the OffHost AID supported power state:
++OFFHOST_AID_ROUTE_PWR_STATE=0x3B
++
++################################################################################
++# Maximum WTX requests entertained by MW
++NXP_WM_MAX_WTX_COUNT=30
++################################################################################
++#Set the default Felica T3T System Code :
++#This settings will be used when application does not set this parameter
++DEFAULT_SYS_CODE={FE:FE}
++#########################################################################
++#Set NCI credit notification timeout value
++NXP_NCI_CREDIT_NTF_TIMEOUT=2
++###############################################################################
++# Set presence check retry count value. Value Range: 0 to 5
++# This value indicates the number of time presence check is repeated in case of
++# failure
++PRESENCE_CHECK_RETRY_COUNT=0
++#########################################################################
++
+diff --git a/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp-SN300U_example.conf b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp-SN300U_example.conf
+new file mode 100644
+index 0000000..ddf1896
+--- /dev/null
++++ b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp-SN300U_example.conf
+@@ -0,0 +1,538 @@
++#################### This file is used by NXP NFC NCI HAL #####################
++###############################################################################
++# Application options
++# Logging Levels
++# NXPLOG_DEFAULT_LOGLEVEL    0x01
++# ANDROID_LOG_DEBUG          0x04
++# ANDROID_LOG_INFO           0x03
++# ANDROID_LOG_WARN           0x02
++# ANDROID_LOG_ERROR          0x01
++# ANDROID_LOG_SILENT         0x00
++NXPLOG_EXTNS_LOGLEVEL=0x04
++NXPLOG_NCIHAL_LOGLEVEL=0x04
++NXPLOG_NCIX_LOGLEVEL=0x04
++NXPLOG_NCIR_LOGLEVEL=0x04
++NXPLOG_FWDNLD_LOGLEVEL=0x04
++NXPLOG_TML_LOGLEVEL=0x04
++NFC_DEBUG_ENABLED=1
++
++###############################################################################
++# Nfc Device Node name
++NXP_NFC_DEV_NODE="/dev/nxp-nci"
++
++###############################################################################
++# Extension for Mifare reader enable
++MIFARE_READER_ENABLE=0x01
++
++###############################################################################
++# NXP proprietary settings
++NXP_ACT_PROP_EXTN={2F, 02, 00}
++
++###############################################################################
++# NXP TVDD configurations settings
++# Allow NFCC to configure External TVDD, two configurations (1 and 2) supported,
++# out of them only one can be configured at a time.
++#NXP_EXT_TVDD_CFG=0x02
++
++###############################################################################
++#config1:SLALM, 3.3V for both RM and CM
++#NXP_EXT_TVDD_CFG_1={20, 02, 0F, 01, A0, 0E, 0B, 31, 01, 01, 31, 00, 00, 00, 01, 00, D0, 0C}
++
++###############################################################################
++#config2: use DCDC in CE, use Tx_Pwr_Req, set CFG2 mode, SLALM,
++#monitoring 5V from DCDC, 3.3V for both RM and CM, DCDCWaitTime=4.2ms
++#NXP_EXT_TVDD_CFG_2={20, 02, 0F, 01, A0, 0E, 0B, 11, 01, C2, B2, 00, B2, 1E, 1F, 00, D0, 0C}
++
++###############################################################################
++# Core configuration rf field filter settings to enable set to 01 to disable set
++# to 00 last bit
++#NXP_CORE_RF_FIELD={ 20, 02, 05, 01, A0, 62, 01, 00 }
++
++###############################################################################
++# To enable i2c fragmentation set i2c fragmentation enable 0x01 to disable set
++# to 0x00
++#NXP_I2C_FRAGMENTATION_ENABLED=0x00
++
++###############################################################################
++#set autonomous mode
++# disable autonomous 0x00
++# enable autonomous  0x01
++NXP_AUTONOMOUS_ENABLE=0x00
++###############################################################################
++#set Guard Timer
++# Guard Timer range to 0x0F-0xFF(i.e.15-255 seconds)
++NXP_GUARD_TIMER_VALUE=0x0F
++###############################################################################
++#Enable SWP full power mode when phone is power off
++#NXP_SWP_FULL_PWR_ON=0x00
++
++################################################################################
++#This is used to configure UICC2 at boot time.
++# UICC2              0x03
++NXP_DEFAULT_UICC2_SELECT=0x03
++###############################################################################
++# CE when Screen state is locked
++# This setting is for DEFAULT_ROUTE,
++# DEFAULT_DESFIRE_ROUTE and DEFAULT_MIFARE_CLT_ROUTE
++# Disable           0x00
++# Enable            0x01
++NXP_CE_ROUTE_STRICT_DISABLE=0x01
++
++###############################################################################
++#SCR Read Tag Operation Timeout in secs
++NXP_SWP_RD_TAG_OP_TIMEOUT=20
++
++###############################################################################
++#Set the default AID route Location :
++#This settings will be used when application does not set this parameter
++# host  0x00
++# eSE   0x01
++# UICC  0x02
++# UICC2 0x03
++# eUICC 0x05
++# eUICC2 0x06
++DEFAULT_ROUTE=0x01
++
++###############################################################################
++#Set the ISODEP (Mifare Desfire) route Location :
++#This settings will be used when application does not set this parameter
++# host  0x00
++# eSE   0x01
++# UICC  0x02
++# UICC2 0x03
++# eUICC 0x05
++# eUICC2 0x06
++DEFAULT_ISODEP_ROUTE=0x01
++
++###############################################################################
++#Set the Mifare CLT route Location :
++#This settings will be used when application does not set this parameter
++# host  0x00
++# eSE   0x01
++# UICC  0x02
++# UICC2 0x03
++# eUICC 0x05
++# eUICC2 0x06
++DEFAULT_MIFARE_CLT_ROUTE=0x01
++
++###############################################################################
++#Set the Felica CLT route Location :
++#This settings will be used when application does not set this parameter
++# eSE   0x01
++# UICC  0x02
++# UICC2 0x03
++DEFAULT_FELICA_CLT_ROUTE=0x01
++
++###############################################################################
++#Set the default AID Power state :
++#This settings will be used when application does not set this parameter
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++DEFAULT_AID_PWR_STATE=0x3B
++###############################################################################
++#Set the Mifare Desfire Power state :
++#This settings will be used when application does not set this parameter
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++DEFAULT_DESFIRE_PWR_STATE=0x3B
++
++###############################################################################
++#Set the Mifare CLT Power state :
++#This settings will be used when application does not set this parameter
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++DEFAULT_MIFARE_CLT_PWR_STATE=0x3B
++
++###############################################################################
++#Set the Felica CLT Power state :
++#This settings will be used when application does not set this parameter
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++DEFAULT_FELICA_CLT_PWR_STATE=0x3B
++
++###############################################################################
++#Set the T4TNfcee AID Power state :
++#This settings will be used when application does not set this parameter
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++DEFAULT_T4TNFCEE_AID_POWER_STATE=0x3B
++
++###############################################################################
++#Set the default Felica T3T System Code OffHost route Location :
++#This settings will be used when application does not set this parameter
++# host  0x00
++# eSE   0x01
++# UICC  0x02
++# UICC2 0x03
++DEFAULT_SYS_CODE_ROUTE=0x01
++###############################################################################
++# AID Matching platform options
++# AID_MATCHING_L 0x01
++# AID_MATCHING_K 0x02
++#AID_MATCHING_PLATFORM=0x01
++
++###############################################################################
++#CHINA_TIANJIN_RF_SETTING
++#Enable  0x01
++#Disable  0x00
++#NXP_CHINA_TIANJIN_RF_ENABLED=0x01
++
++###############################################################################
++#SWP_SWITCH_TIMEOUT_SETTING
++# Allowed range of swp timeout setting is 0x00 to 0x3C [0 - 60].
++# Timeout in milliseconds, for example
++# No Timeout  0x00
++# 10 millisecond timeout 0x0A
++#NXP_SWP_SWITCH_TIMEOUT=0x0A
++
++###############################################################################
++# Flashing Options Configurations
++# FLASH_UPPER_VERSION 0x01
++# FLASH_DIFFERENT_VERSION 0x02
++# FLASH_ALWAYS 0x03
++NXP_FLASH_CONFIG=0x02
++
++###############################################################################
++# Bail out mode
++#  If set to 1, NFCC is using bail out mode for either Type A or Type B poll.
++NFA_POLL_BAIL_OUT_MODE=0x01
++
++###############################################################################
++# White list of Hosts
++# This values will be the Hosts(NFCEEs) in the HCI Network.
++DEVICE_HOST_ALLOW_LIST={02,80,C0,C1,C2}
++
++###############################################################################
++# Choose the presence-check algorithm for type-4 tag.  If not defined, the default value is 1.
++# 0  NFA_RW_PRES_CHK_DEFAULT; Let stack selects an algorithm
++# 1  NFA_RW_PRES_CHK_I_BLOCK; ISO-DEP protocol's empty I-block
++# 2 NFA_RW_PRES_CHK_ISO_DEP_NAK; Type - 4 tag protocol iso-dep nak presence check
++#    command is sent waiting for rsp and ntf.
++PRESENCE_CHECK_ALGORITHM=2
++###############################################################################
++# Options to Fallback to alternative route
++# DH                0x01
++# ESE               0x02
++NXP_CHECK_DEFAULT_PROTO_SE_ID=0x01
++###############################################################################
++# Vendor Specific Proprietary Protocol & Discovery Configuration
++# Set to 0xFF if unsupported
++#  byte[0] NCI_PROTOCOL_18092_ACTIVE
++#  byte[1] NCI_PROTOCOL_B_PRIME
++#  byte[2] NCI_PROTOCOL_DUAL
++#  byte[3] NCI_PROTOCOL_15693
++#  byte[4] NCI_PROTOCOL_KOVIO
++#  byte[5] NCI_PROTOCOL_MIFARE
++#  byte[6] NCI_DISCOVERY_TYPE_POLL_KOVIO
++#  byte[7] NCI_DISCOVERY_TYPE_POLL_B_PRIME
++#  byte[8] NCI_DISCOVERY_TYPE_LISTEN_B_PRIME
++NFA_PROPRIETARY_CFG={05, FF, FF, 06, 81, 80, FF, FF, FF}
++
++###############################################################################
++#NXP_CN_TRANSIT_BLK_NUM_CHECK_ENABLE
++#Enable/Disable block number checks for china transit use case
++#Enable  0x01
++#Disable  0x00
++#NXP_CN_TRANSIT_BLK_NUM_CHECK_ENABLE=0x01
++
++################################################################################
++#This flags will enable different modes of Lx Debug based on bits of the Byte0
++#Byte 0:
++# |_________Bit Mask_______|   Debug Mode
++#  b7|b6|b5|b4|b3|b2|b1|b0|
++#    |  |x |  |  |  |  |  |    Modulation Detected Notification
++#    |  |  |X |  |  |  |  |    Enable L1 Events (ISO14443-4, ISO18092)
++#    |  |  |  |X |  |  |  |    Enable L2 Reader Events(ROW specific)
++#    |  |  |  |  |X |  |  |    Enable Felica SystemCode
++#    |  |  |  |  |  |X |  |    Enable Felica RF (all Felica CM events)
++#    |  |  |  |  |  |  |X |    Enable L2 Events CE (ISO14443-3, RF Field ON/OFF)
++#Byte 1:
++# |_________Bit Mask_______|   Debug Mode
++#  b7|b6|b5|b4|b3|b2|b1|b0|
++#    |  |x |  |  |  |  |  |    Enable L2 events during RF activation ISO 14443-3
++#    |  |  |  |  |  |  |  |
++#    |  |  |  |  |  |  |  |
++#    |  |  |  |  |  |  |  |
++#    |  |  |  |  |  |  |  |
++#    |  |  |  |  |  |  |  |
++#                              Byte1    Byte0
++#                                  \__ __/
++# e.g. NXP_CORE_PROP_SYSTEM_DEBUG=0x0031 ==> Modulation detected, L1, L2 CE
++NXP_CORE_PROP_SYSTEM_DEBUG=0x0000
++
++###############################################################################
++# Forcing HOST to listen for a selected protocol
++# 0x00 : Disable Host Listen
++# 0x01 : Enable Host to Listen (A)  for ISO-DEP tech A
++# 0x02 : Enable Host to Listen (B)  for ISO-DEP tech B
++# 0x04 : Enable Host to Listen (F)  for T3T Tag Type Protocol tech F
++# 0x07 : Enable Host to Listen (ABF)for ISO-DEP tech AB & T3T Tag Type Protocol tech F
++HOST_LISTEN_TECH_MASK=0x07
++
++###############################################################################
++# Enable forward functionality
++# Disable           0x00
++# Enable            0x01 //Any positive value as per below bit configuration
++# HOST power states when type A/B only UICC present
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++FORWARD_FUNCTIONALITY_ENABLE=0x01
++
++###############################################################################
++# Configure the NFC Extras to open and use a static pipe.  If the value is
++# not set or set to 0, then the default is use a dynamic pipe based on a
++# destination gate (see NFA_HCI_DEFAULT_DEST_GATE).  Note there is a value
++# for each EE (ESE/SIM1/SIM2/ESIM)
++OFF_HOST_ESE_PIPE_ID=0x16
++OFF_HOST_SIM_PIPE_ID=0x0A
++OFF_HOST_SIM2_PIPE_ID=0x23
++OFF_HOST_ESIM_PIPE_ID=0x2B
++OFF_HOST_ESIM2_PIPE_ID=0x2F
++
++###############################################################################
++#Set the Felica T3T System Code Power state :
++#This settings will be used when application does not set this parameter
++#Update Power state as per NCI2.0
++DEFAULT_SYS_CODE_PWR_STATE=0x00
++###############################################################################
++#Default Secure Element route id
++DEFAULT_OFFHOST_ROUTE=0x01
++
++###############################################################################
++#Maximum SMB transceive wait for response
++NXP_SMB_TRANSCEIVE_TIMEOUT=2000
++###############################################################################
++# Firmware file type
++#.so file   0x01
++#.bin file  0x02
++NXP_FW_TYPE=0x01
++############################################################################
++# Extended APDU length for ISO_DEP
++ISO_DEP_MAX_TRANSCEIVE=0xFEFF
++#########################################################################
++# Support for Amendment I SEMS specification
++# Support SEMS Amendment I 0x01
++# Support NXP LS client    0x00
++NXP_GP_AMD_I_SEMS_SUPPORTED=0x01
++###############################################################################
++#All eSE terminals shall be match with the  /vendor/etc/vintf/manifest.xml file
++#under android.hardware.secure_element.
++# The terminal name shall start from 1
++# Assign terminal number to each interface based on system config
++NXP_SPI_SE_TERMINAL_NUM="eSE1"
++###############################################################################
++# Assign terminal number to each interface based on system config
++#NXP_VISO_SE_TERMINAL_NUM="eSE3"
++###############################################################################
++# Assign terminal number to each interface based on system config
++NXP_NFC_SE_TERMINAL_NUM="eSE2"
++###############################################################################
++# Config option to enable wired mode support for either eSE or eUICC
++# None = 0x00
++# WiredMode over eSE = 0x01
++# WiredMode over eUICC = 0x02
++NXP_SE_SMB_TERMINAL_TYPE=0x01
++###############################################################################
++#For static or dynamic dual UICC feature support
++#Enable static dual uicc feature by setting value 0x00
++#Enable dynamic dual uicc feature by setting value 0x01
++NXP_DUAL_UICC_ENABLE=0x01
++###############################################################################
++# Time to wait by DH when NFCC will report eSE Cold Temp Error.
++# The value is as per the UM and in seconds
++NXP_SE_COLD_TEMP_ERROR_DELAY=0x05
++
++###############################################################################
++# Set configuration optimization decision setting
++# Enable    = 0x01
++# Disable   = 0x00
++NXP_SET_CONFIG_ALWAYS=0x00
++
++###############################################################################
++#OffHost ESE route location for MultiSE
++#ESE = 01
++OFFHOST_ROUTE_ESE={01}
++
++###############################################################################
++#OffHost UICC route location for MultiSE
++#UICC1 = 02
++#UICC2 = 03
++#EUICC = 05
++#EUICC2 = 06
++OFFHOST_ROUTE_UICC={02:03:05:06}
++
++###############################################################################
++#T4T NFCEE ENABLE
++#bit pos 0 = T4T NFCEE Enable
++#bit pos 6 = T4T NFCEE Contactless write enable
++#bit pos 7 = Proprietary file enable
++NXP_T4T_NFCEE_ENABLE=0x01
++
++###############################################################################
++#WLC mode
++#0x00 = if WLC Application running in MW (non-autonomous mode)
++#0x01 = if WLC Application running in FW (autonomous mode)
++NXP_WLC_MODE=0x01
++
++###############################################################################
++#CORE_SET_CONF_CMD to reset Prop Emvco Flag
++NXP_PROP_RESET_EMVCO_CMD={20, 02, 05, 01, A0, 44, 01, 00}
++
++###############################################################################
++#Guard time in ms for the mPOS/SCR module to process the reader start/stop req
++NXP_RDR_REQ_GUARD_TIME=0
++
++###############################################################################
++#MW workaround to enable LPCD when EMVCO polling mode starts and disable
++#while switching back to NFC Forum mode
++# 0 --> Disable MW workaround
++# 1 --> Enable MW workaround
++# 2 --> Use this option only for FW versions below 1.10.52
++NXP_RDR_DISABLE_ENABLE_LPCD=1
++
++###############################################################################
++# Firmware patch format, Only 1 and 5 should be set
++#   0 -> NFC Default
++#   1 -> EMVCO Default
++#   3 -> EMVCO Polling, DISC_IDLE = POWER_OFF, DISC DEACTIVATE =  Removal process
++#   5 -> EMVCO Cert Polling, DISC_IDLE = Removal process  , DISC DEACTIVATE =   POWER_OFF
++#   7 -> EMVCO Polling, DISC_IDLE = POWER_OFF, DISC DEACTIVATE =  POWER_OFF
++NFA_CONFIG_FORMAT=1
++
++################################################################################
++# Enable disconnect tag in screen off
++# Disable           0x00
++# Enable            0x01
++NXP_DISCONNECT_TAG_IN_SCRN_OFF=0x01
++
++#################################################################################
++# Enable wait/delay if RF session is active.
++# Disable           0x00
++# Enable            0x01
++NXP_CE_PRIORITY_ENABLED=0x00
++
++#################################################################################
++# Core configuration extensions
++# It includes
++# Wired mode settings A0ED, A0EE
++# Tag Detector A040, A041, A043
++# Low Power mode A007
++# Clock settings A002, A003
++# PbF settings A008
++# Clock timeout settings A004
++# eSE (SVDD) PWR REQ settings A0F2
++# Window size A0D8
++# DWP Speed   A0D5
++# How eSE connected to PN553 A012
++# UICC2 bit rate A0D1
++# SWP1A interface A0D4
++# DWP intf behavior config, SVDD Load activated by default if set to 0x31 A037
++NXP_CORE_CONF_EXTN={20, 02, 09, 02,
++    A0, EC, 01, 01,
++    A0, ED, 01, 03
++}
++#       A0, F2, 01, 01,
++#       A0, 40, 01, 01,
++#       A0, 41, 01, 02,
++#       A0, 43, 01, 04,
++#       A0, 02, 01, 01,
++#       A0, 03, 01, 11,
++#       A0, 07, 01, 03,
++#       A0, 08, 01, 01
++#       }
++
++###############################################################################
++# Core configuration settings
++# Below params are not recommended to add in CONF block.
++# LA_BIT_FRAME_SDD(0x30)
++# LA_PLATFORM_CONFIG(0x31)
++# LA_SEL_INFO(0x32)
++# LB_SENSB_INFO(0x38)
++# LF_PROTOCOL(0x50)
++# NFCC_CONFIG_CONTROL(0x85)
++
++NXP_CORE_CONF={ 20, 02, 25, 0B,
++        28, 01, 00,
++        21, 01, 00,
++        33, 04, 01, 02, 03, 04,
++        54, 01, 06,
++        5B, 01, 00,
++        3E, 01, 00,
++        80, 01, 01,
++        81, 01, 01,
++        82, 01, 0E,
++        18, 01, 01,
++        68, 01, 01
++        }
++###############################################################################
++# Enable(0x01) or disable(0x00) non-standard tag reading
++# Disable Non-standard card read         0x00
++# Enable Non-standard card read          0x01
++NXP_SUPPORT_NON_STD_CARD=0x00
++#################################################################################
++# Enable(0x01) or disable(0x00 ) for getting HW Info log over SMB wired
++# Disable getting HW info log            0x00
++# Enable getting HW info log             0x01
++NXP_GET_HW_INFO_LOG=0x00
++#################################################################################
++# Enable(0x01) or disable(0x00) iso dep sak merge
++# Disable SAK merging         0x00
++# Enable SAK merging          0x01
++NXP_ISO_DEP_MERGE_SAK=0x01
++#################################################################################
++# Valid time difference range within for non-standard tag detection from first
++# Activation fail to next discovery
++# Note :- 1. This will take effect only when NXP_SUPPORT_NON_STD_CARD is enabled
++#         2. The number will be multiplied by 100ms by MW.
++# Default:
++# Set to 00 if not supported
++#  byte[0] MIFARE_CLASSIC 100ms
++#  byte[1] ISO_DEP        300ms
++NXP_NON_STD_CARD_TIMEDIFF={01, 03}
++#################################################################################
++# Enable or Disable UICC ETSI support
++# Disable UICC ETSI support         0
++# Enable UICC ETSI support          1
++NXP_UICC_ETSI_SUPPORT=0
++#################################################################################
++# Enable Stop/Start of RF discovery for NFCEE recovery
++# Disable RF Restart for NFCEE recovery   0
++# Enable RF Restart for NFCEE recovery    1
++NXP_RESTART_RF_FOR_NFCEE_RECOVERY=1
++#################################################################################
++# Power data refresh duration in seconds.
++# If this is configured, then power data will be refreshed from NFCC with
++# configured duration.
++# Power tracker feature will be disabled at run time if it is not configured
++# or configured with value of zero.
++#NXP_SYSTEM_POWER_TRACE_POLL_DURATION_SEC=30
++#################################################################################
++# Enable or Disable DCDC
++# DCDC Off    0
++# DCDC On     1
++NXP_ENABLE_DCDC_ON=1
++#################################################################################
+diff --git a/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_AndroidOne.conf b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_AndroidOne.conf
+new file mode 100644
+index 0000000..ae0017c
+--- /dev/null
++++ b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_AndroidOne.conf
+@@ -0,0 +1,471 @@
++#################### This file is used by NXP NFC NCI HAL #####################
++###############################################################################
++# Application options
++# Logging Levels
++# NXPLOG_DEFAULT_LOGLEVEL    0x01
++# ANDROID_LOG_DEBUG          0x04
++# ANDROID_LOG_INFO           0x03
++# ANDROID_LOG_WARN           0x02
++# ANDROID_LOG_ERROR          0x01
++# ANDROID_LOG_SILENT         0x00
++NXPLOG_EXTNS_LOGLEVEL=0x04
++NXPLOG_NCIHAL_LOGLEVEL=0x04
++NXPLOG_NCIX_LOGLEVEL=0x04
++NXPLOG_NCIR_LOGLEVEL=0x04
++NXPLOG_FWDNLD_LOGLEVEL=0x04
++NXPLOG_TML_LOGLEVEL=0x04
++NFC_DEBUG_ENABLED=1
++
++###############################################################################
++# Nfc Device Node name
++NXP_NFC_DEV_NODE="/dev/nxp-nci"
++
++###############################################################################
++# Extension for Mifare reader enable
++MIFARE_READER_ENABLE=0x01
++
++###############################################################################
++# NXP proprietary settings
++NXP_ACT_PROP_EXTN={2F, 02, 00}
++
++###############################################################################
++# NXP TVDD configurations settings
++# Allow NFCC to configure External TVDD, two configurations (1 and 2) supported,
++# out of them only one can be configured at a time.
++#NXP_EXT_TVDD_CFG=0x02
++
++###############################################################################
++#config1:SLALM, 3.3V for both RM and CM
++#NXP_EXT_TVDD_CFG_1={20, 02, 0F, 01, A0, 0E, 0B, 31, 01, 01, 31, 00, 00, 00, 01, 00, D0, 0C}
++
++###############################################################################
++#config2: use DCDC in CE, use Tx_Pwr_Req, set CFG2 mode, SLALM,
++#monitoring 5V from DCDC, 3.3V for both RM and CM, DCDCWaitTime=4.2ms
++#NXP_EXT_TVDD_CFG_2={20, 02, 0F, 01, A0, 0E, 0B, 11, 01, C2, B2, 00, B2, 1E, 1F, 00, D0, 0C}
++
++###############################################################################
++# Core configuration rf field filter settings to enable set to 01 to disable set
++# to 00 last bit
++#NXP_CORE_RF_FIELD={ 20, 02, 05, 01, A0, 62, 01, 00 }
++
++###############################################################################
++# To enable i2c fragmentation set i2c fragmentation enable 0x01 to disable set
++# to 0x00
++#NXP_I2C_FRAGMENTATION_ENABLED=0x00
++
++###############################################################################
++#set autonomous mode
++# disable autonomous 0x00
++# enable autonomous  0x01
++NXP_AUTONOMOUS_ENABLE=0x00
++###############################################################################
++#set Guard Timer
++# Gurad Timer range to 0x0F-0xFF(i.e.15-255 seconds)
++NXP_GUARD_TIMER_VALUE=0x0F
++###############################################################################
++#Enable SWP full power mode when phone is power off
++#NXP_SWP_FULL_PWR_ON=0x00
++
++################################################################################
++#This is used to configure UICC2 at boot time.
++# UICC2              0x03
++NXP_DEFAULT_UICC2_SELECT=0x03
++
++###############################################################################
++#SCR Read Tag Operation Timeout in secs
++NXP_SWP_RD_TAG_OP_TIMEOUT=20
++
++###############################################################################
++#Set the default route Location :
++#This settings will be used when application does not set this parameter
++# host  0x00
++# eSE   0xC0
++# UICC  0x80
++DEFAULT_ROUTE=0xC0
++
++###############################################################################
++#Set the ISODEP (Mifare Desfire) route Location :
++#This settings will be used when application does not set this parameter
++# host  0x00
++# eSE   0xC0
++# UICC  0x80
++DEFAULT_ISODEP_ROUTE=0xC0
++
++###############################################################################
++#Set the Default Off Host route Location :
++#This settings will be used when application does not set this parameter
++# host  0x00
++# eSE   0xC0
++# UICC  0x80
++DEFAULT_OFFHOST_ROUTE=0xC0
++
++###############################################################################
++#Set the Felica CLT route Location :
++#This settings will be used when application does not set this parameter
++# eSE   0xC0
++# UICC  0x80
++DEFAULT_NFCF_ROUTE=0xC0
++
++###############################################################################
++#Set the default AID Power state :
++#This settings will be used when application does not set this parameter
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++DEFAULT_AID_PWR_STATE=0x3B
++###############################################################################
++#Set the Mifare Desfire Power state :
++#This settings will be used when application does not set this parameter
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++DEFAULT_DESFIRE_PWR_STATE=0x3B
++
++###############################################################################
++#Set the Mifare CLT Power state :
++#This settings will be used when application does not set this parameter
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++DEFAULT_MIFARE_CLT_PWR_STATE=0x3B
++
++###############################################################################
++#Set the Felica CLT Power state :
++#This settings will be used when application does not set this parameter
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++DEFAULT_FELICA_CLT_PWR_STATE=0x3B
++
++###############################################################################
++#Set the T4TNfcee AID Power state :
++#This settings will be used when application does not set this parameter
++# bit pos 0 = Switch On
++# bit pos 1 = Switch Off
++# bit pos 2 = Battery Off
++# bit pos 3 = Screen off unlock
++# bit pos 4 = Screen On lock
++# bit pos 5 = Screen Off lock
++DEFAULT_T4TNFCEE_AID_POWER_STATE=0x3B
++
++###############################################################################
++#Set the default Felica T3T System Code OffHost route Location :
++#This settings will be used when application does not set this parameter
++# host  0x00
++# eSE   0xC0
++# UICC  0x80
++DEFAULT_SYS_CODE_ROUTE=0xC0
++###############################################################################
++# AID Matching platform options
++# AID_MATCHING_L 0x01
++# AID_MATCHING_K 0x02
++#AID_MATCHING_PLATFORM=0x01
++
++###############################################################################
++#CHINA_TIANJIN_RF_SETTING
++#Enable  0x01
++#Disable  0x00
++#NXP_CHINA_TIANJIN_RF_ENABLED=0x01
++
++###############################################################################
++#SWP_SWITCH_TIMEOUT_SETTING
++# Allowed range of swp timeout setting is 0x00 to 0x3C [0 - 60].
++# Timeout in milliseconds, for example
++# No Timeout  0x00
++# 10 millisecond timeout 0x0A
++#NXP_SWP_SWITCH_TIMEOUT=0x0A
++
++###############################################################################
++# Flashing Options Configurations
++# FLASH_UPPER_VERSION 0x01
++# FLASH_DIFFERENT_VERSION 0x02
++# FLASH_ALWAYS 0x03
++NXP_FLASH_CONFIG=0x02
++
++###############################################################################
++# Bail out mode
++#  If set to 1, NFCC is using bail out mode for either Type A or Type B poll.
++NFA_POLL_BAIL_OUT_MODE=0x01
++
++###############################################################################
++# White list of Hosts
++# This values will be the Hosts(NFCEEs) in the HCI Network.
++DEVICE_HOST_WHITE_LIST={C0, 80}
++
++###############################################################################
++# Choose the presence-check algorithm for type-4 tag.  If not defined, the default value is 1.
++# 0  NFA_RW_PRES_CHK_DEFAULT; Let stack selects an algorithm
++# 1  NFA_RW_PRES_CHK_I_BLOCK; ISO-DEP protocol's empty I-block
++# 2 NFA_RW_PRES_CHK_ISO_DEP_NAK; Type - 4 tag protocol iso-dep nak presence check
++#    command is sent waiting for rsp and ntf.
++PRESENCE_CHECK_ALGORITHM=2
++###############################################################################
++# Options to Fallback to alternative route
++# Disable           0x00
++# DH                0x01
++# ESE               0x02
++NXP_CHECK_DEFAULT_PROTO_SE_ID=0x01
++###############################################################################
++# Vendor Specific Proprietary Protocol & Discovery Configuration
++# Set to 0xFF if unsupported
++#  byte[0] NCI_PROTOCOL_18092_ACTIVE
++#  byte[1] NCI_PROTOCOL_B_PRIME
++#  byte[2] NCI_PROTOCOL_DUAL
++#  byte[3] NCI_PROTOCOL_15693
++#  byte[4] NCI_PROTOCOL_KOVIO
++#  byte[5] NCI_PROTOCOL_MIFARE
++#  byte[6] NCI_DISCOVERY_TYPE_POLL_KOVIO
++#  byte[7] NCI_DISCOVERY_TYPE_POLL_B_PRIME
++#  byte[8] NCI_DISCOVERY_TYPE_LISTEN_B_PRIME
++NFA_PROPRIETARY_CFG={05, FF, FF, 06, 81, 80, FF, FF, FF}
++
++###############################################################################
++#NXP_CN_TRANSIT_BLK_NUM_CHECK_ENABLE
++#Enable/Disable block number checks for china transit use case
++#Enable  0x01
++#Disable  0x00
++#NXP_CN_TRANSIT_BLK_NUM_CHECK_ENABLE=0x01
++
++################################################################################
++#This flags will enable different modes of Lx Debug based on bits of the Byte0
++#Byte 0:
++# |_________Bit Mask_______|   Debug Mode
++#  b7|b6|b5|b4|b3|b2|b1|b0|
++#    |  |x |  |  |  |  |  |    Modulation Detected Notification
++#    |  |  |X |  |  |  |  |    Enable L1 Events (ISO14443-4, ISO18092)
++#    |  |  |  |X |  |  |  |    Enable L2 Reader Events(ROW specific)
++#    |  |  |  |  |X |  |  |    Enable Felica SystemCode
++#    |  |  |  |  |  |X |  |    Enable Felica RF (all Felica CM events)
++#    |  |  |  |  |  |  |X |    Enable L2 Events CE (ISO14443-3, RF Field ON/OFF)
++#Byte 1: RFU, shall always be 0x00
++#                              Byte1    Byte0
++#                                  \__ __/
++# e.g. NXP_CORE_PROP_SYSTEM_DEBUG=0x0031 ==> Modulation detected, L1, L2 CE
++NXP_CORE_PROP_SYSTEM_DEBUG=0x0000
++
++###############################################################################
++# Enable forward functionality
++# Disable           0x00
++# Enable            0x01
++FORWARD_FUNCTIONALITY_ENABLE=0x01
++
++###############################################################################
++# Configure the NFC Extras to open and use a static pipe.  If the value is
++# not set or set to 0, then the default is use a dynamic pipe based on a
++# destination gate (see NFA_HCI_DEFAULT_DEST_GATE).  Note there is a value
++# for each EE (ESE/SIM1/SIM2)
++OFF_HOST_ESE_PIPE_ID=0x16
++OFF_HOST_SIM_PIPE_ID=0x0A
++OFF_HOST_SIM2_PIPE_ID=0x23
++
++###############################################################################
++#Set the Felica T3T System Code Power state :
++#This settings will be used when application does not set this parameter
++#Update Power state as per NCI2.0
++DEFAULT_SYS_CODE_PWR_STATE=0x00
++
++###############################################################################
++#Maximum SMB transceive wait for response
++NXP_SMB_TRANSCEIVE_TIMEOUT=2000
++###############################################################################
++# Firmware file type
++#.so file   0x01
++#.bin file  0x02
++NXP_FW_TYPE=0x01
++############################################################################
++# Extended APDU length for ISO_DEP
++ISO_DEP_MAX_TRANSCEIVE=0xFEFF
++#########################################################################
++# Support for Amendment I SEMS specification
++# Support SEMS Amendment I 0x01
++# Support NXP LS client    0x00
++NXP_GP_AMD_I_SEMS_SUPPORTED=0x01
++###############################################################################
++#All eSE terminals shall be match with the  /vendor/etc/vintf/manifest.xml file
++#under android.hardware.secure_element.
++# The terminal name shall start from 1
++# Assign terminal number to each interface based on system config
++NXP_SPI_SE_TERMINAL_NUM="eSE1"
++###############################################################################
++# Assign terminal number to each interface based on system config
++#NXP_VISO_SE_TERMINAL_NUM="eSE3"
++###############################################################################
++# Assign terminal number to each interface based on system config
++NXP_NFC_SE_TERMINAL_NUM="eSE2"
++###############################################################################
++#For static or dynamic dual UICC feature support
++#Enable static dual uicc feature by setting value 0x00
++#Enable dynamic dual uicc feature by setting value 0x01
++NXP_DUAL_UICC_ENABLE=0x01
++###############################################################################
++# Time to wait by DH when NFCC will report eSE Cold Temp Error.
++# The value is as per the UM and in seconds
++NXP_SE_COLD_TEMP_ERROR_DELAY=0x05
++
++###############################################################################
++# Set configuration optimization decision setting
++# Enable    = 0x01
++# Disable   = 0x00
++NXP_SET_CONFIG_ALWAYS=0x00
++
++###############################################################################
++#OffHost ESE route location for MultiSE
++#ESE = C0
++OFFHOST_ROUTE_ESE={C0}
++
++###############################################################################
++#OffHost UICC route location for MultiSE
++#UICC1 = 80
++OFFHOST_ROUTE_UICC={80}
++
++###############################################################################
++#T4T NFCEE ENABLE
++#bit pos 0 = T4T NFCEE Enable
++#bit pos 6 = T4T NFCEE Contactless write enable
++#bit pos 7 = Proprietary file enable
++NXP_T4T_NFCEE_ENABLE=0x01
++
++###############################################################################
++#WLC mode
++#0x00 = if WLC Application running in MW (non-autonomous mode)
++#0x01 = if WLC Application running in FW (autonomous mode)
++NXP_WLC_MODE=0x01
++
++###############################################################################
++#CORE_SET_CONF_CMD to reset Prop Emvco Flag
++NXP_PROP_RESET_EMVCO_CMD={20, 02, 05, 01, A0, 44, 01, 00}
++
++###############################################################################
++#Guard time in ms for the mPOS/SCR module to process the reader start/stop req
++NXP_RDR_REQ_GUARD_TIME=0
++
++###############################################################################
++#MW workaround to enable LPCD when EMVCO polling mode starts and disable
++#while switching back to NFC Forum mode
++# 0 --> Disable MW workaround
++# 1 --> Enable MW workaround
++# 2 --> Use this option only for FW versions below 1.10.52
++NXP_RDR_DISABLE_ENABLE_LPCD=1
++
++###############################################################################
++# Firmware patch format, Only 1 and 5 should be set
++#   0 -> NFC Default
++#   1 -> EMVCO Default
++#   3 -> EMVCO Polling, DISC_IDLE = POWER_OFF, DISC DEACTIVATE =  Removal process
++#   5 -> EMVCO Cert Polling, DISC_IDLE = Removal process  , DISC DEACTIVATE =   POWER_OFF
++#   7 -> EMVCO Polling, DISC_IDLE = POWER_OFF, DISC DEACTIVATE =  POWER_OFF
++NFA_CONFIG_FORMAT=1
++
++#################################################################################
++# Enable disconnect tag in screen off
++# Disable           0x00
++# Enable            0x01
++NXP_DISCONNECT_TAG_IN_SCRN_OFF=0x01
++
++#################################################################################
++# Enable wait/delay if RF session is active.
++# Disable           0x00
++# Enable            0x01
++NXP_CE_PRIORITY_ENABLED=0x00
++
++#################################################################################
++# Core configuration extensions
++# It includes
++# Wired mode settings A0ED, A0EE
++# Tag Detector A040, A041, A043
++# Low Power mode A007
++# Clock settings A002, A003
++# PbF settings A008
++# Clock timeout settings A004
++# eSE (SVDD) PWR REQ settings A0F2
++# Window size A0D8
++# DWP Speed   A0D5
++# How eSE connected to PN553 A012
++# UICC2 bit rate A0D1
++# SWP1A interface A0D4
++# DWP intf behavior config, SVDD Load activated by default if set to 0x31 A037
++NXP_CORE_CONF_EXTN={20, 02, 09, 02,
++    A0, EC, 01, 01,
++    A0, ED, 01, 01
++}
++#       A0, F2, 01, 01,
++#       A0, 40, 01, 01,
++#       A0, 41, 01, 02,
++#       A0, 43, 01, 04,
++#       A0, 02, 01, 01,
++#       A0, 03, 01, 11,
++#       A0, 07, 01, 03,
++#       A0, 08, 01, 01
++#       }
++
++###############################################################################
++# Core configuration settings
++# Below params are not recommended to add in CONF block.
++# LA_BIT_FRAME_SDD(0x30)
++# LA_PLATFORM_CONFIG(0x31)
++# LA_SEL_INFO(0x32)
++# LB_SENSB_INFO(0x38)
++# LF_PROTOCOL(0x50)
++# NFCC_CONFIG_CONTROL(0x85)
++
++NXP_CORE_CONF={ 20, 02, 25, 0B,
++        28, 01, 00,
++        21, 01, 00,
++        33, 04, 01, 02, 03, 04,
++        54, 01, 06,
++        5B, 01, 00,
++        3E, 01, 00,
++        80, 01, 01,
++        81, 01, 01,
++        82, 01, 0E,
++        18, 01, 01,
++        68, 01, 01
++        }
++###############################################################################
++# Enable(0x01) or disable(0x00) non-standard tag reading
++# Disable Non-standard card read         0x00
++# Enable Non-standard card read          0x01
++NXP_SUPPORT_NON_STD_CARD=0x00
++#################################################################################
++# Enable(0x01) or disable(0x00 ) for getting HW Info log over SMB wired
++# Disable getting HW info log            0x00
++# Enable getting HW info log             0x01
++NXP_GET_HW_INFO_LOG=0x00
++#################################################################################
++# Enable(0x01) or disable(0x00) iso dep sak merge
++# Disable SAK merging         0x00
++# Enable SAK merging          0x01
++NXP_ISO_DEP_MERGE_SAK=0x01
++#################################################################################
++# Valid time difference range within for non-standard tag detection from first
++# Activation fail to next discovery
++# Note :- 1. This will take effect only when NXP_SUPPORT_NON_STD_CARD is enabled
++#         2. The number will be multiplied by 100ms by MW.
++# Default:
++# Set to 00 if not supported
++#  byte[0] MIFARE_CLASSIC 100ms
++#  byte[1] ISO_DEP        300ms
++NXP_NON_STD_CARD_TIMEDIFF={01, 03}
++#################################################################################
++# Enable or Disable UICC ETSI support
++# Disable UICC ETSI support         0
++# Enable UICC ETSI support          1
++NXP_UICC_ETSI_SUPPORT=0
++#################################################################################
++# Enable Stop/Start of RF discovery for NFCEE recovery
++# Disable RF Restart for NFCEE recovery   0
++# Enable RF Restart for NFCEE recovery    1
++NXP_RESTART_RF_FOR_NFCEE_RECOVERY=0
++#################################################################################
+diff --git a/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_RF-SN300U_example.conf b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_RF-SN300U_example.conf
+new file mode 100644
+index 0000000..e851d48
+--- /dev/null
++++ b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_RF-SN300U_example.conf
+@@ -0,0 +1,67 @@
++###############################################################################
++# System clock source selection configuration
++#define CLK_SRC_XTAL       1
++#define CLK_SRC_PLL        2
++NXP_SYS_CLK_SRC_SEL=0x02
++
++###############################################################################
++# System clock frequency selection configuration
++#define CLK_FREQ_13MHZ         1
++#define CLK_FREQ_19_2MHZ       2
++#define CLK_FREQ_24MHZ         3
++#define CLK_FREQ_26MHZ         4
++#define CLK_FREQ_38_4MHZ       5
++#define CLK_FREQ_52MHZ         6
++#define CLK_FREQ_32MHZ         7
++#define CLK_FREQ_48MHZ         8
++NXP_SYS_CLK_FREQ_SEL=0x02
++
++###############################################################################
++# The timeout value to be used for clock request acknowledgment
++# min value = 0x01 to max = 0x06
++#NXP_SYS_CLOCK_TO_CFG=0x06
++
++###############################################################################
++# The delay to try to start PLL/XTAL when using sys clock 256/fc units = ~18.8 us
++# min value = 0x01 to max = 0x1F
++#NXP_CLOCK_REQ_DELAY=0x16
++
++###############################################################################
++# MAX 20 RF configuration blocks are supported by MW.
++# NXP RF configuration ALM/PLM settings
++# This section needs to be updated with the correct values based on the platform
++#NXP_RF_CONF_BLK_1={
++#}
++
++###############################################################################
++# NXP RF configuration ALM/PLM settings
++# This section needs to be updated with the correct values based on the platform
++#NXP_RF_CONF_BLK_2={
++#}
++
++###############################################################################
++# NXP RF configuration ALM/PLM settings
++# This section needs to be updated with the correct values based on the platform
++#NXP_RF_CONF_BLK_3={
++#}
++
++###############################################################################
++# NXP RF configuration ALM/PLM settings
++# This section needs to be updated with the correct values based on the platform
++#NXP_RF_CONF_BLK_4={
++#}
++
++###############################################################################
++# NXP RF configuration ALM/PLM settings
++# This section needs to be updated with the correct values based on the platform
++#NXP_RF_CONF_BLK_5={
++#}
++
++###############################################################################
++# NXP RF configuration ALM/PLM settings
++# This section needs to be updated with the correct values based on the platform
++#NXP_RF_CONF_BLK_6={
++#}
++
++
++###############################################################################
+-- 
+2.25.1
+

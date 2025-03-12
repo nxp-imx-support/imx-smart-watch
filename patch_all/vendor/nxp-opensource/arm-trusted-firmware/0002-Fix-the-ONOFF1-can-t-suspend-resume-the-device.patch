@@ -1,0 +1,31 @@
+From ca229c93dde7d7b2c6acab2eb4c1e412afd91850 Mon Sep 17 00:00:00 2001
+From: Luca Shen <luca.shen@nxp.com>
+Date: Wed, 24 Jul 2024 04:39:18 +0200
+Subject: [PATCH 2/3] Fix the ONOFF1 can't suspend/resume the device
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since we added a structure before the original third one in the last commit，which caused its numbering to shift backwards by one digit.
+
+Signed-off-by: Luca Shen <luca.shen@nxp.com>
+---
+ plat/imx/imx8ulp/imx8ulp_psci.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/plat/imx/imx8ulp/imx8ulp_psci.c b/plat/imx/imx8ulp/imx8ulp_psci.c
+index e69d1da48..8fbe34412 100644
+--- a/plat/imx/imx8ulp/imx8ulp_psci.c
++++ b/plat/imx/imx8ulp/imx8ulp_psci.c
+@@ -308,7 +308,7 @@ void imx_set_pwr_mode_cfg(abs_pwr_mode_t mode)
+ 		} else if (mode == PD_PWR_MODE) {
+ 			/* overwrite the buck3 voltage setting in active mode */
+ 			upower_pmic_i2c_read(0x22, &volt);
+-			pd_pmic_reg_cfgs[3].i2c_data = volt;
++			pd_pmic_reg_cfgs[4].i2c_data = volt;
+ 			memcpy(&pwr_sys_cfg->ps_apd_pmic_reg_data_cfg, &pd_pmic_reg_cfgs,
+ 				 sizeof(ps_apd_pmic_reg_data_cfgs_t));
+ 		}
+-- 
+2.25.1
+

@@ -1,0 +1,100 @@
+From 32188e66ca0cdfa04a49ab1c2f957b5bfbb3e010 Mon Sep 17 00:00:00 2001
+From: Jason He <jason.he_1@nxp.com>
+Date: Wed, 13 Nov 2024 15:17:08 +0900
+Subject: [PATCH 3/3] imx8ulp: Keep PTF26 on during suspend-wakeup
+
+Signed-off-by: Jason He <jason.he_1@nxp.com>
+---
+ plat/imx/imx8ulp/apd_context.c  |  7 ++++---
+ plat/imx/imx8ulp/imx8ulp_psci.c | 14 +++++++++++---
+ 2 files changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/plat/imx/imx8ulp/apd_context.c b/plat/imx/imx8ulp/apd_context.c
+index 8f1afdc92..af34b0df3 100644
+--- a/plat/imx/imx8ulp/apd_context.c
++++ b/plat/imx/imx8ulp/apd_context.c
+@@ -140,7 +140,8 @@ void apd_io_pad_off(void)
+ 	/* off the PTD/E/F, need to be customized based on actual user case */
+ 	for (i = 0; i < 3; i++) {
+ 		for (j = 0; j < iomuxc_sections[i].reg_num; j++) {
+-			mmio_write_32(iomuxc_sections[i].offset + j * 4, 0);
++			if (!(i == 2 && j == 26))
++				mmio_write_32(iomuxc_sections[i].offset + j * 4, 0);
+ 		}
+ 	}
+ 
+@@ -521,8 +522,6 @@ void imx_apd_ctx_restore(unsigned int proc_num)
+ 
+ 	wdog3_restore();
+ 
+-	iomuxc_restore();
+-
+ 	tpm5_restore();
+ 
+ 	xrdc_reinit();
+@@ -530,6 +529,8 @@ void imx_apd_ctx_restore(unsigned int proc_num)
+ 	/* Restore GPIO after xrdc_reinit, otherwise MSCs are invalid */
+ 	gpio_restore(apd_gpio_ctx, APD_GPIO_CTRL_NUM);
+ 
++	iomuxc_restore();
++
+ 	/* restore the gic config */
+ 	plat_gic_restore(proc_num, &imx_gicv3_ctx);
+ 
+diff --git a/plat/imx/imx8ulp/imx8ulp_psci.c b/plat/imx/imx8ulp/imx8ulp_psci.c
+index 8fbe34412..2cfd99ac3 100644
+--- a/plat/imx/imx8ulp/imx8ulp_psci.c
++++ b/plat/imx/imx8ulp/imx8ulp_psci.c
+@@ -144,7 +144,7 @@ ps_apd_pwr_mode_cfgs_t apd_pwr_mode_cfgs = {
+ 		.swt_board_offs = 0x170,
+ 		.swt_mem_offs = 0x178,
+ 		.pmic_cfg = PMIC_CFG(0x23, 0x0, 0x2),
+-		.pad_cfg = PAD_CFG(0x0, 0xc, 0x01e80a00),
++		.pad_cfg = PAD_CFG(0xc, 0x0, 0x01e80a00),
+ 		.bias_cfg = BIAS_CFG(0x0, 0x2, 0x2, 0x0),
+ 	},
+ 
+@@ -161,7 +161,7 @@ ps_apd_pwr_mode_cfgs_t apd_pwr_mode_cfgs = {
+ 		.swt_board_offs = 0x120,
+ 		.swt_mem_offs = 0x128,
+ 		.pmic_cfg = PMIC_CFG(0x23, 0x0, 0x2),
+-		.pad_cfg = PAD_CFG(0x0, 0x0, 0x0deb7a00),
++		.pad_cfg = PAD_CFG(0xc, 0x0, 0x0deb7a00),
+ 		.bias_cfg = BIAS_CFG(0x2, 0x2, 0x2, 0x0),
+ 	},
+ 
+@@ -169,7 +169,7 @@ ps_apd_pwr_mode_cfgs_t apd_pwr_mode_cfgs = {
+ 		.swt_board_offs = 0x110,
+ 		.swt_mem_offs = 0x118,
+ 		.pmic_cfg = PMIC_CFG(0x23, 0x0, 0x2),
+-		.pad_cfg = PAD_CFG(0x0, 0x0, 0x0deb7a00),
++		.pad_cfg = PAD_CFG(0xc, 0x0, 0x0deb7a00),
+ 		.bias_cfg = BIAS_CFG(0x2, 0x2, 0x2, 0x0),
+ 	},
+ };
+@@ -407,14 +407,22 @@ void imx_domain_suspend(const psci_power_state_t *target_state)
+ }
+ 
+ #define DRAM_LPM_STATUS		U(0x2802b004)
++#define PMC_SYS_CTRL_PAD	U(0x283590BC)
+ extern void imx8ulp_init_scmi_server(void);
+ void imx_domain_suspend_finish(const psci_power_state_t *target_state)
+ {
+ 	unsigned int cpu = MPIDR_AFFLVL0_VAL(read_mpidr_el1());
++	unsigned int val;
+ 
+ 	if (is_local_state_off(SYSTEM_PWR_STATE(target_state))) {
++
++		val = mmio_read_32(PMC_SYS_CTRL_PAD);
+ 		/* restore the ap domain context */
+ 		imx_apd_ctx_restore(cpu);
++		mmio_write_32(PMC_SYS_CTRL_PAD, val & 0xFFFFFFF0);
++
++		/* restore the PAD status */
++		mmio_write_32(PMC_SYS_CTRL_PAD, 0x0);
+ 
+ 		/* clear the upower wakeup */
+ 		upwr_xcp_set_rtd_apd_llwu(APD_DOMAIN, 0, NULL);
+-- 
+2.25.1
+

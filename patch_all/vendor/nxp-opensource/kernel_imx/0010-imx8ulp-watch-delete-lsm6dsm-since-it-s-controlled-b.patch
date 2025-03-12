@@ -1,0 +1,31 @@
+From 5e0d51cae271813cd0eb88d4cef713d32aa9b9b5 Mon Sep 17 00:00:00 2001
+From: "jason.he" <jason.he_1@nxp.com>
+Date: Wed, 5 Mar 2025 08:59:38 +0000
+Subject: [PATCH 10/10] imx8ulp-watch: delete lsm6dsm since it's controlled by
+ rpmsg_sensor
+
+Signed-off-by: jason.he <jason.he_1@nxp.com>
+---
+ arch/arm64/boot/dts/freescale/imx8ulp-watch.dts | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/freescale/imx8ulp-watch.dts b/arch/arm64/boot/dts/freescale/imx8ulp-watch.dts
+index d90b777c20b8..74d06bc95843 100644
+--- a/arch/arm64/boot/dts/freescale/imx8ulp-watch.dts
++++ b/arch/arm64/boot/dts/freescale/imx8ulp-watch.dts
+@@ -272,10 +272,12 @@ mpl3115@60 {
+ 		reg = <0x60>;
+ 	};
+ 
++	/*
+ 	lsm6dsm@6a {
+ 		compatible = "st,lsm6dso";
+ 		reg = <0x6a>;
+ 	};
++	*/
+ 
+ 	tsl2540@39 {
+ 		compatible = "ams,tsl2540";
+-- 
+2.25.1
+

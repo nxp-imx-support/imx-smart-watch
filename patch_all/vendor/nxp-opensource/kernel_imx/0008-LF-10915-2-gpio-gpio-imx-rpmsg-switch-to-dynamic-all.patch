@@ -1,0 +1,33 @@
+From ee59d1d22a6ce01752e1958f9cd2046badc28dd3 Mon Sep 17 00:00:00 2001
+From: Haibo Chen <haibo.chen@nxp.com>
+Date: Fri, 8 Dec 2023 18:23:03 +0800
+Subject: [PATCH 08/10] LF-10915-2 gpio: gpio-imx-rpmsg: switch to dynamic
+ allocat GPIO base
+
+gpiolib want to get completely rid of static gpiobase allocation,
+so switch to dynamic allocat GPIO base, also can avoid warning
+
+[    1.529974] gpio gpiochip0: Static allocation of GPIO base
+is deprecated, use dynamic allocation.
+
+Signed-off-by: Haibo Chen <haibo.chen@nxp.com>
+---
+ drivers/gpio/gpio-imx-rpmsg.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpio/gpio-imx-rpmsg.c b/drivers/gpio/gpio-imx-rpmsg.c
+index 76996dadeb6c..2592e85fd3cb 100644
+--- a/drivers/gpio/gpio-imx-rpmsg.c
++++ b/drivers/gpio/gpio-imx-rpmsg.c
+@@ -455,7 +455,7 @@ static int imx_rpmsg_gpio_probe(struct platform_device *pdev)
+ 	gc->parent = dev;
+ 	gc->label = kasprintf(GFP_KERNEL, "imx-rpmsg-gpio-%d", port->idx);
+ 	gc->ngpio = IMX_RPMSG_GPIO_PER_PORT;
+-	gc->base = of_alias_get_id(np, "gpio") * IMX_RPMSG_GPIO_PER_PORT;
++	gc->base = -1;
+ 
+ 	gc->direction_input = imx_rpmsg_gpio_direction_input;
+ 	gc->direction_output = imx_rpmsg_gpio_direction_output;
+-- 
+2.25.1
+

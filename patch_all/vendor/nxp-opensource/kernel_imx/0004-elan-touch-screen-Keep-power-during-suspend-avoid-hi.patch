@@ -1,0 +1,26 @@
+From 4971e03fffbde991d7b1e078ca049f0b8d101cf9 Mon Sep 17 00:00:00 2001
+From: Xinyu Chen <xinyu.chen@nxp.com>
+Date: Fri, 9 Jun 2023 16:26:03 +0800
+Subject: [PATCH 04/10] elan touch screen: Keep power during suspend, avoid
+ high power consumption by RESET pin.
+
+Signed-off-by: Xinyu Chen <xinyu.chen@nxp.com>
+---
+ drivers/input/touchscreen/elants_i2c.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/input/touchscreen/elants_i2c.c b/drivers/input/touchscreen/elants_i2c.c
+index 1b2eaa3dc8b4..217c6d696ad6 100644
+--- a/drivers/input/touchscreen/elants_i2c.c
++++ b/drivers/input/touchscreen/elants_i2c.c
+@@ -1556,6 +1556,7 @@ static int elants_i2c_probe(struct i2c_client *client)
+ 
+ 		ts->keep_power_in_suspend = true;
+ 	}
++	ts->keep_power_in_suspend = true;
+ 	ts->elan_buffer_mode = !device_property_read_bool(&client->dev, "elan,non-buffer-mode");
+ 	error = device_property_read_u32(&client->dev, "elan,num-fingers", &(ts->num_fingers));
+ 	if (error)
+-- 
+2.25.1
+

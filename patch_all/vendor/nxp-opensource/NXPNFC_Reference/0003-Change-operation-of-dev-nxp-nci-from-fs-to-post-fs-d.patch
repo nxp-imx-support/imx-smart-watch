@@ -1,0 +1,23 @@
+From 5afd964ffdb3e40f5fb47782dbc40ca184df4567 Mon Sep 17 00:00:00 2001
+From: "jason.he" <jason.he_1@nxp.com>
+Date: Fri, 21 Feb 2025 04:25:06 +0000
+Subject: [PATCH 3/3] Change operation of /dev/nxp-nci from fs to post-fs-data
+
+Signed-off-by: jason.he <jason.he_1@nxp.com>
+---
+ nxp/SNxxx/hw/init.SNxxx.nfc.rc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/nxp/SNxxx/hw/init.SNxxx.nfc.rc b/nxp/SNxxx/hw/init.SNxxx.nfc.rc
+index 53c4114..f43dfdc 100755
+--- a/nxp/SNxxx/hw/init.SNxxx.nfc.rc
++++ b/nxp/SNxxx/hw/init.SNxxx.nfc.rc
+@@ -1,4 +1,4 @@
+-on fs
++on post-fs-data
+     chmod 0660 /dev/nxp-nci
+     chown nfc nfc /dev/nxp-nci
+ 
+-- 
+2.25.1
+

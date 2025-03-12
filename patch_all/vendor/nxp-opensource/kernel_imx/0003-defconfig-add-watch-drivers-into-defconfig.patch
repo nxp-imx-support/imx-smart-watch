@@ -1,0 +1,41 @@
+From 0a5d7cd92d43fef9d2600869a825d64f4c544c39 Mon Sep 17 00:00:00 2001
+From: Terry Lv <Terry.Lv@nxp.com>
+Date: Mon, 6 May 2024 15:11:54 +0900
+Subject: [PATCH 03/10] defconfig: add watch drivers into defconfig.
+
+Signed-off-by: Terry Lv <Terry.Lv@nxp.com>
+---
+ arch/arm64/configs/imx_v8_defconfig | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/arm64/configs/imx_v8_defconfig b/arch/arm64/configs/imx_v8_defconfig
+index 098719c59985..586dde51c822 100644
+--- a/arch/arm64/configs/imx_v8_defconfig
++++ b/arch/arm64/configs/imx_v8_defconfig
+@@ -385,6 +385,7 @@ CONFIG_TOUCHSCREEN_EXC3000=m
+ CONFIG_TOUCHSCREEN_GOODIX=m
+ CONFIG_TOUCHSCREEN_EDT_FT5X06=m
+ CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_I2C=m
++CONFIG_TOUCHSCREEN_ELAN=y
+ CONFIG_INPUT_MISC=y
+ CONFIG_INPUT_PWM_BEEPER=m
+ CONFIG_INPUT_PWM_VIBRA=m
+@@ -608,6 +609,7 @@ CONFIG_DRM_PANEL_SEIKO_43WVF1G=y
+ CONFIG_DRM_PANEL_SITRONIX_ST7703=m
+ CONFIG_DRM_PANEL_TRULY_NT35597_WQXGA=m
+ CONFIG_DRM_PANEL_WKS_101WX001=y
++CONFIG_DRM_PANEL_USMP_RM67162=y
+ CONFIG_DRM_DISPLAY_CONNECTOR=m
+ CONFIG_DRM_LONTIUM_LT8912B=m
+ CONFIG_DRM_LONTIUM_LT9611=m
+@@ -972,6 +974,7 @@ CONFIG_MS5611=m
+ CONFIG_MS5611_I2C=m
+ CONFIG_INV_MPU6050_IIO=m
+ CONFIG_INV_MPU6050_I2C=m
++CONFIG_MAX30102=y
+ CONFIG_PWM=y
+ CONFIG_PWM_ADP5585=y
+ CONFIG_PWM_CROS_EC=m
+-- 
+2.25.1
+

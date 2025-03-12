@@ -1,0 +1,246 @@
+From 4feb0a3b8ee4fc38bb08cb5707ef08743da74b03 Mon Sep 17 00:00:00 2001
+From: Jason He <jason.he_1@nxp.com>
+Date: Mon, 15 Jul 2024 14:45:21 +0900
+Subject: [PATCH 1/2] Support for watch_8ulp
+
+1, support 8ulp A2
+2, use SDK built boot.img
+3, double swap size
+4, sepolicy permissive
+5, support IW612
+6, support SN300
+
+Change-Id: I5d8950f6d3d7cdf76e446df1d72d857672d890d8
+Signed-off-by: Jason He <jason.he_1@nxp.com>
+---
+ common/build/Makefile              |  2 ++
+ common/imx_path/ImxPathConfig.mk   |  3 +++
+ common/tools/imx-make.sh           | 18 ++++++++++++++++--
+ imx8ulp/BoardConfigCommon.mk       |  2 +-
+ imx8ulp/watch_8ulp/AndroidUboot.sh |  6 +++---
+ imx8ulp/watch_8ulp/BoardConfig.mk  | 15 ++++++++++++---
+ imx8ulp/watch_8ulp/fstab.nxp       |  2 +-
+ imx8ulp/watch_8ulp/watch_8ulp.mk   | 21 ++++++++++++---------
+ 8 files changed, 50 insertions(+), 19 deletions(-)
+
+diff --git a/common/build/Makefile b/common/build/Makefile
+index ae046dbc..cff2384c 100644
+--- a/common/build/Makefile
++++ b/common/build/Makefile
+@@ -21,3 +21,5 @@ include ${nxp_git_path}/common/build/uboot.mk
+ -include ${GPU_VIV6_PATH}/gpu-viv6/driver/hal/kernel/galcore.mk
+ -include ${VVCAM_PATH}/vvcam/vvcam.mk
+ -include ${MXMWIFI_PATH}/mxm_wifiex/mxmwifi.mk
++-include ${NXPNFC_PATH}/nxpnfc.mk
++-include ${NXPESE_PATH}/nxpese.mk
+diff --git a/common/imx_path/ImxPathConfig.mk b/common/imx_path/ImxPathConfig.mk
+index 3f23b189..222b0b23 100644
+--- a/common/imx_path/ImxPathConfig.mk
++++ b/common/imx_path/ImxPathConfig.mk
+@@ -30,3 +30,6 @@ IMX_MKIMAGE_PATH := vendor/nxp-opensource
+ IMX_PATH := vendor/nxp-opensource
+ FSL_IMX_DEMO_PATH := vendor/nxp-opensource
+ LIBDRM_IMX := vendor/nxp-opensource
++IMX_NFC_REF_PATH:= vendor/nxp-opensource/NXPNFC_Reference
++NXPNFC_PATH := vendor/nxp-opensource/nxpnfc
++NXPESE_PATH := vendor/nxp-opensource/nxpese
+diff --git a/common/tools/imx-make.sh b/common/tools/imx-make.sh
+index c2cb5654..b8199469 100755
+--- a/common/tools/imx-make.sh
++++ b/common/tools/imx-make.sh
+@@ -73,6 +73,8 @@ build_kernel_oot_module_flag=0
+ build_galcore=""
+ build_vvcam=""
+ build_mxmwifi=""
++build_nxpnfc=""
++build_nxpese=""
+ build_bootimage=""
+ build_vendorbootimage=""
+ build_dtboimage=""
+@@ -99,6 +101,10 @@ for arg in ${args[*]} ; do
+                     build_vvcam="vvcam";;
+         mxmwifi) build_kernel_oot_module_flag=1
+                     build_mxmwifi="mxmwifi";;
++        nxpnfc) build_kernel_oot_module_flag=1
++                    build_nxpnfc="nxpnfc";;
++        nxpese) build_kernel_oot_module_flag=1
++                    build_nxpese="nxpese";;
+         bootimage) build_android_flag=1;
+                     build_kernel="${OUT}/kernel";
+                     build_bootimage="bootimage";;
+@@ -141,6 +147,14 @@ if [ -n "${build_kernel_modules}" ]; then
+     build_kernel_oot_module_flag=1;
+ fi
+ 
++if [ -n "${build_kernel_modules}" ]; then
++    if [ ${TARGET_PRODUCT} = "watch_8ulp" ] || [ ${TARGET_PRODUCT} = "evk_8ulp" ]; then
++        build_nxpnfc="nxpnfc";
++        build_nxpese="nxpese";
++        build_kernel_oot_module_flag=1;
++    fi
++fi
++
+ product_makefile=`pwd`/`find device/nxp -maxdepth 4 -name "${TARGET_PRODUCT}.mk"`;
+ product_path=${product_makefile%/*}
+ soc_path=${product_path%/*}
+@@ -183,7 +197,7 @@ fi
+ if [ ${build_kernel_oot_module_flag} -eq 1 ] || [ -n "${build_kernel_modules}" ]; then
+     soc_path=${soc_path} product_path=${product_path} nxp_git_path=${nxp_git_path} clean_build=${clean_build} \
+         skip_config_or_clean=${skip_config_or_clean} make -C ./ -f ${nxp_git_path}/common/build/Makefile ${parallel_option} \
+-        ${build_vvcam} ${build_galcore} ${build_mxmwifi} </dev/null || exit
++        ${build_vvcam} ${build_galcore} ${build_mxmwifi} ${build_nxpese} ${build_nxpnfc} </dev/null || exit
+ fi
+ 
+ if [ ${build_android_flag} -eq 1 ] || [ ${build_whole_android_flag} -eq 1 ]; then
+@@ -196,7 +210,7 @@ if [ ${build_android_flag} -eq 1 ] || [ ${build_whole_android_flag} -eq 1 ]; the
+     TARGET_IMX_KERNEL=true make ${parallel_option} ${build_bootimage} ${build_vendorbootimage} ${build_dtboimage} ${build_vendordlkmimage} || exit
+     if [ -n "${build_bootimage}" ] || [ ${build_whole_android_flag} -eq 1 ]; then
+         if [ ${TARGET_PRODUCT} = "evk_8mp" ] || [ ${TARGET_PRODUCT} = "evk_8mn" ] \
+-        || [ ${TARGET_PRODUCT} = "evk_8ulp" ] || [ ${TARGET_PRODUCT} = "mek_8q" ] \
++        || [ ${TARGET_PRODUCT} = "mek_8q" ] \
+         || [ ${TARGET_PRODUCT} = "evk_8mm" ] || [ ${TARGET_PRODUCT} = "evk_8mq" ]; then
+             if [ ${enable_gki} -eq 1 ]; then
+                 mv ${OUT}/boot.img ${OUT}/boot-imx.img
+diff --git a/imx8ulp/BoardConfigCommon.mk b/imx8ulp/BoardConfigCommon.mk
+index b71e9b2d..7dd31063 100644
+--- a/imx8ulp/BoardConfigCommon.mk
++++ b/imx8ulp/BoardConfigCommon.mk
+@@ -85,7 +85,7 @@ KERNEL_OUT ?= $(OUT_DIR)/target/product/$(PRODUCT_DEVICE)/obj/KERNEL_OBJ
+ 
+ TARGET_BOARD_KERNEL_HEADERS := $(CONFIG_REPO_PATH)/common/kernel-headers
+ 
+-TARGET_IMX_KERNEL ?= false
++TARGET_IMX_KERNEL ?= true
+ ifeq ($(TARGET_IMX_KERNEL),false)
+ BOARD_PREBUILT_BOOTIMAGE := vendor/nxp/fsl-proprietary/gki/boot.img
+ TARGET_NO_KERNEL := true
+diff --git a/imx8ulp/watch_8ulp/AndroidUboot.sh b/imx8ulp/watch_8ulp/AndroidUboot.sh
+index b13edae0..3510a983 100644
+--- a/imx8ulp/watch_8ulp/AndroidUboot.sh
++++ b/imx8ulp/watch_8ulp/AndroidUboot.sh
+@@ -39,8 +39,8 @@ build_imx_uboot()
+ {
+ 	echo Building i.MX U-Boot with firmware
+ 	cp ${FSL_PROPRIETARY_PATH}/fsl-proprietary/mcu-sdk/imx8ulp/imx8ulp_watch_mcu_demo.img ${BOARD_MKIMAGE_PATH}/m33_image.bin
+-	cp ${FSL_PROPRIETARY_PATH}/fsl-proprietary/uboot-firmware/imx8ulp/upower_a0.bin ${BOARD_MKIMAGE_PATH}/upower.bin
+-	cp ${FSL_PROPRIETARY_PATH}/ele/mx8ulpa0-ahab-container.img ${BOARD_MKIMAGE_PATH}
++	cp ${FSL_PROPRIETARY_PATH}/fsl-proprietary/uboot-firmware/imx8ulp/upower.bin ${BOARD_MKIMAGE_PATH}/upower.bin
++	cp ${FSL_PROPRIETARY_PATH}/ele/mx8ulpa2-ahab-container.img ${BOARD_MKIMAGE_PATH}
+ 	cp ${UBOOT_OUT}/u-boot.$1 ${BOARD_MKIMAGE_PATH}
+ 	cp ${UBOOT_OUT}/spl/u-boot-spl.bin ${BOARD_MKIMAGE_PATH}
+ 	cp ${UBOOT_OUT}/tools/mkimage ${BOARD_MKIMAGE_PATH}/mkimage_uboot
+@@ -69,7 +69,7 @@ build_imx_uboot()
+ 	# codebase, so mkimage_imx8 will be generated under Android codebase top dir.
+ 	pwd_backup=${PWD}
+ 	PWD=${PWD}/${IMX_MKIMAGE_PATH}/imx-mkimage/
+-	make -C ${IMX_MKIMAGE_PATH}/imx-mkimage/ SOC=${MKIMAGE_SOC} REV=A0 flash_singleboot_m33 || exit 1
++	make -C ${IMX_MKIMAGE_PATH}/imx-mkimage/ SOC=${MKIMAGE_SOC} REV=A2 flash_singleboot_m33 || exit 1
+ 	PWD=${pwd_backup}
+ 
+ 	if [ `echo $2 | rev | cut -d '-' -f1 | rev` != "dual" ]; then
+diff --git a/imx8ulp/watch_8ulp/BoardConfig.mk b/imx8ulp/watch_8ulp/BoardConfig.mk
+index 4843163b..97975f7e 100644
+--- a/imx8ulp/watch_8ulp/BoardConfig.mk
++++ b/imx8ulp/watch_8ulp/BoardConfig.mk
+@@ -95,6 +95,14 @@ BOARD_VENDOR_KERNEL_MODULES += \
+     $(TARGET_OUT_INTERMEDIATES)/MXMWIFI_OBJ/mlan.ko \
+     $(TARGET_OUT_INTERMEDIATES)/MXMWIFI_OBJ/moal.ko
+ 
++#NFC
++BOARD_VENDOR_KERNEL_MODULES += \
++    $(TARGET_OUT_INTERMEDIATES)/NXPNFC_OBJ/nfc_i2c.ko
++
++#ESE
++BOARD_VENDOR_KERNEL_MODULES += \
++	$(TARGET_OUT_INTERMEDIATES)/NXPESE_OBJ/p73.ko
++
+ # -------@block_bluetooth-------
+ # NXP 8987 bluetooth
+ BOARD_HAVE_BLUETOOTH_NXP := true
+@@ -109,7 +117,7 @@ BOARD_KERNEL_BASE := 0x80400000
+ 
+ # NXP default config
+ BOARD_KERNEL_CMDLINE := init=/init firmware_class.path=/vendor/firmware loop.max_part=7 bootconfig
+-BOARD_BOOTCONFIG += androidboot.hardware=nxp
++BOARD_BOOTCONFIG += androidboot.hardware=nxp androidboot.selinux=permissive
+ 
+ # memory config
+ BOARD_KERNEL_CMDLINE += cma=640M transparent_hugepage=never
+@@ -119,7 +127,7 @@ BOARD_BOOTCONFIG += androidboot.lcd_density=120
+ 
+ # wifi config
+ BOARD_BOOTCONFIG += androidboot.wificountrycode=CN
+-BOARD_KERNEL_CMDLINE += moal.mod_para=wifi_mod_para_sd416.conf
++BOARD_KERNEL_CMDLINE += moal.mod_para=wifi_mod_para_sd612.conf
+ 
+ # low memory device build config
+ ifeq ($(LOW_MEMORY),true)
+@@ -137,7 +145,8 @@ TARGET_BOARD_DTS_CONFIG := imx8ulp:imx8ulp-watch.dtb
+ ALL_DEFAULT_INSTALLED_MODULES += $(BOARD_VENDOR_KERNEL_MODULES)
+ 
+ # -------@block_sepolicy-------
+-BOARD_SEPOLICY_DIRS := \
++BOARD_SEPOLICY_DIRS += \
+        $(CONFIG_REPO_PATH)/imx8ulp/sepolicy \
+        $(IMX_DEVICE_PATH)/sepolicy
+ 
++-include ${IMX_NFC_REF_PATH}/nxp/SNxxx/BoardConfigNfc.mk
+diff --git a/imx8ulp/watch_8ulp/fstab.nxp b/imx8ulp/watch_8ulp/fstab.nxp
+index 2ec48084..bcf831c1 100644
+--- a/imx8ulp/watch_8ulp/fstab.nxp
++++ b/imx8ulp/watch_8ulp/fstab.nxp
+@@ -7,7 +7,7 @@
+ /dev/block/by-name/userdata    /data        f2fs    nodev,noatime,nosuid,inlinecrypt,reserve_root=32768 latemount,wait,check,quota,formattable,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized,fscompress,keydirectory=/metadata/vold/metadata_encryption,checkpoint=fs
+ /dev/block/by-name/metadata    /metadata    f2fs    noatime,nosuid,nodev,discard,sync,fsync_mode=nobarrier                           wait,formattable,first_stage_mount,check
+ /dev/block/by-name/misc        /misc        emmc    defaults                                                                         defaults
+-/dev/block/zram0 none swap defaults zramsize=629145600
++/dev/block/zram0 none swap defaults zramsize=1258291200
+ 
+ system                         /system       erofs ro                                                              wait,slotselect,avb,avb_keys=/avb,logical,first_stage_mount
+ system                         /system       ext4  noatime,errors=panic,ro,barrier=1,inode_readahead_blks=8        wait,slotselect,avb,avb_keys=/avb,logical,first_stage_mount
+diff --git a/imx8ulp/watch_8ulp/watch_8ulp.mk b/imx8ulp/watch_8ulp/watch_8ulp.mk
+index 948936c8..127496bf 100644
+--- a/imx8ulp/watch_8ulp/watch_8ulp.mk
++++ b/imx8ulp/watch_8ulp/watch_8ulp.mk
+@@ -263,13 +263,13 @@ PRODUCT_COPY_FILES += \
+     $(FSL_PROPRIETARY_PATH)/fsl-proprietary/sof/sof-gcc/sof-imx8ulp.ri:$(TARGET_COPY_OUT_VENDOR)/firmware/imx/sof/sof-imx8ulp.ri
+ 
+ # -------@block_camera-------
+-#PRODUCT_COPY_FILES += \
+-#    $(IMX_DEVICE_PATH)/camera_config_imx8ulp.json:$(TARGET_COPY_OUT_VENDOR)/etc/configs/camera_config_imx8ulp.json \
+-#    $(IMX_DEVICE_PATH)/external_camera_config.xml:$(TARGET_COPY_OUT_VENDOR)/etc/external_camera_config.xml
+-#
+-#PRODUCT_SOONG_NAMESPACES += hardware/google/camera
+-#PRODUCT_SOONG_NAMESPACES += vendor/nxp-opensource/imx/camera
+-#
++PRODUCT_COPY_FILES += \
++    $(IMX_DEVICE_PATH)/camera_config_imx8ulp.json:$(TARGET_COPY_OUT_VENDOR)/etc/configs/camera_config_imx8ulp.json \
++    $(IMX_DEVICE_PATH)/external_camera_config.xml:$(TARGET_COPY_OUT_VENDOR)/etc/external_camera_config.xml
++
++PRODUCT_SOONG_NAMESPACES += hardware/google/camera
++PRODUCT_SOONG_NAMESPACES += vendor/nxp-opensource/imx/camera
++
+ # -------@block_display-------
+ 
+ PRODUCT_AAPT_CONFIG += xlarge large tvdpi hdpi xhdpi xxhdpi
+@@ -353,8 +353,8 @@ PRODUCT_PACKAGES += \
+ 
+ # NXP 8987 WiFi Firmware
+ PRODUCT_COPY_FILES += \
+-    vendor/nxp/imx-firmware/nxp/FwImage_IW416_SD/sdiouartiw416_combo_v0.bin:vendor/firmware/sdiouartiw416_combo_v0.bin \
+-    vendor/nxp/imx-firmware/nxp/android_wifi_mod_para.conf:vendor/firmware/wifi_mod_para_sd416.conf
++    vendor/nxp/imx-firmware/nxp/FwImage_IW612_SD/sduart_nw61x_v1.bin.se:vendor/firmware/sduart_nw61x_v1.bin.se \
++    vendor/nxp/imx-firmware/nxp/android_wifi_mod_para.conf:vendor/firmware/wifi_mod_para_sd612.conf
+ 
+ # Wifi regulatory
+ PRODUCT_COPY_FILES += \
+@@ -495,3 +495,6 @@ PRODUCT_COPY_FILES += \
+ # Keymint configuration
+ PRODUCT_COPY_FILES += \
+     frameworks/native/data/etc/android.software.device_id_attestation.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.software.device_id_attestation.xml
++
++#NFC SN300
++$(call inherit-product, ${IMX_NFC_REF_PATH}/nxp/SNxxx/device-nfc.mk)
+-- 
+2.25.1
+

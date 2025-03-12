@@ -1,0 +1,182 @@
+From d554b7fc2a8a23a8d3907de844b7d3f70bb045d8 Mon Sep 17 00:00:00 2001
+From: "jason.he" <jason.he_1@nxp.com>
+Date: Thu, 26 Dec 2024 09:06:15 +0000
+Subject: [PATCH] Some fix.
+
+1, Add .gitignore & nxpnfc.mk
+2, Fix build err
+
+Signed-off-by: jason.he <jason.he_1@nxp.com>
+---
+ .gitignore       |  9 +++++++++
+ nfc/Kbuild       |  4 ++--
+ nfc/common.c     |  2 +-
+ nfc/common_ese.c |  2 +-
+ nfc/i2c_drv.c    |  8 ++++----
+ nfc/i2c_drv.h    |  2 +-
+ nxpnfc.mk        | 47 +++++++++++++++++++++++++++++++++++++++++++++++
+ 7 files changed, 65 insertions(+), 9 deletions(-)
+ create mode 100644 .gitignore
+ create mode 100644 nxpnfc.mk
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..81255a4
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,9 @@
++*.o
++*.mod.*
++Module.symvers
++modules.order
++*.mod
++.*
++*.symtypes
++*.ko
++!.gitignore
+diff --git a/nfc/Kbuild b/nfc/Kbuild
+index 02db26a..75bb7d3 100644
+--- a/nfc/Kbuild
++++ b/nfc/Kbuild
+@@ -1,8 +1,8 @@
+-obj-$(CONFIG_NXP_NFC_I2C) := nfc_i2c.o
++obj-m := nfc_i2c.o
+ 
+ nfc_i2c-y := common.o \
+              common_ese.o \
+              i2c_drv.o
+ 
+ ccflags-y += -DDYNAMIC_DEBUG_MODULE
+-
++ccflags-y += $(KBUILD_OPTIONS)
+diff --git a/nfc/common.c b/nfc/common.c
+index f34baa9..edf8af7 100644
+--- a/nfc/common.c
++++ b/nfc/common.c
+@@ -248,7 +248,7 @@ static int nfc_gpio_info(struct nfc_dev *nfc_dev, unsigned long arg)
+ 	}
+ 	ret = copy_to_user((uint32_t *) arg, &gpios_status, sizeof(value));
+ 	if (ret < 0) {
+-		pr_err("%s : Unable to copy data from kernel space to user space");
++		pr_err("%s : Unable to copy data from kernel space to user space", __func__);
+ 		return -EFAULT;
+ 	}
+ 	return 0;
+diff --git a/nfc/common_ese.c b/nfc/common_ese.c
+index b67f93d..30f4222 100644
+--- a/nfc/common_ese.c
++++ b/nfc/common_ese.c
+@@ -334,7 +334,7 @@ int perform_ese_cold_reset(unsigned long arg)
+ 			return -EPERM;
+ 		}
+ 	}
+-	pr_debug("%s: arg = %d ret = %lu\n", __func__, arg, ret);
++	pr_debug("%s: arg = %lu ret = %d\n", __func__, arg, ret);
+ 	return ret;
+ }
+ EXPORT_SYMBOL(perform_ese_cold_reset);
+diff --git a/nfc/i2c_drv.c b/nfc/i2c_drv.c
+index f335386..77fc0b3 100644
+--- a/nfc/i2c_drv.c
++++ b/nfc/i2c_drv.c
+@@ -431,7 +431,7 @@ err:
+ 	return ret;
+ }
+ 
+-int nfc_i2c_dev_remove(struct i2c_client *client)
++void nfc_i2c_dev_remove(struct i2c_client *client)
+ {
+ 	int ret = 0;
+ 	struct nfc_dev *nfc_dev = NULL;
+@@ -441,11 +441,11 @@ int nfc_i2c_dev_remove(struct i2c_client *client)
+ 	if (!nfc_dev) {
+ 		pr_err("%s: device doesn't exist anymore\n", __func__);
+ 		ret = -ENODEV;
+-		return ret;
++		return;
+ 	}
+ 	if (nfc_dev->dev_ref_count > 0) {
+ 		pr_err("%s: device already in use\n", __func__);
+-		return -EBUSY;
++		return;
+ 	}
+ 	device_init_wakeup(&client->dev, false);
+ 	free_irq(client->irq, nfc_dev);
+@@ -456,7 +456,7 @@ int nfc_i2c_dev_remove(struct i2c_client *client)
+ 	kfree(nfc_dev->read_kbuf);
+ 	kfree(nfc_dev->write_kbuf);
+ 	kfree(nfc_dev);
+-	return ret;
++	return;
+ }
+ 
+ int nfc_i2c_dev_suspend(struct device *device)
+diff --git a/nfc/i2c_drv.h b/nfc/i2c_drv.h
+index 628ca08..8473f3d 100644
+--- a/nfc/i2c_drv.h
++++ b/nfc/i2c_drv.h
+@@ -39,7 +39,7 @@ struct i2c_dev {
+ long nfc_i2c_dev_ioctl(struct file *pfile, unsigned int cmd, unsigned long arg);
+ int nfc_i2c_dev_probe(struct i2c_client *client,
+ 		      const struct i2c_device_id *id);
+-int nfc_i2c_dev_remove(struct i2c_client *client);
++void nfc_i2c_dev_remove(struct i2c_client *client);
+ int nfc_i2c_dev_suspend(struct device *device);
+ int nfc_i2c_dev_resume(struct device *device);
+ 
+diff --git a/nxpnfc.mk b/nxpnfc.mk
+new file mode 100644
+index 0000000..52e0174
+--- /dev/null
++++ b/nxpnfc.mk
+@@ -0,0 +1,47 @@
++# Copyright 2021 NXP
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++KERNEL_SRC := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
++TARGET_ARCH := $(TARGET_KERNEL_ARCH)
++NXPNFC_CROSS_COMPILE := aarch64-linux-gnu-
++
++NXP_NFC_SRC_PATH := $(NXPNFC_PATH)/nfc
++NXPNFC_OUT := $(TARGET_OUT_INTERMEDIATES)/NXPNFC_OBJ
++
++#KERNEL_CFLAGS ?= KCFLAGS=-mno-android -DDEBUG
++KERNEL_CFLAGS ?= KCFLAGS=-mno-android
++ARCH ?= $(TARGET_ARCH)
++
++KBUILD_OPTIONS := -I$(realpath $(NXPNFC_PATH)/nfc/)
++
++NXPNFC_KERNELENVSH := $(NXPNFC_OUT)/kernelenv.sh
++.PHONY: $(NXPNFC_KERNELENVSH)
++$(NXPNFC_KERNELENVSH):
++	mkdir -p $(NXPNFC_OUT)
++	echo 'export KERNEL_SRC=$(KERNEL_SRC)' > $(NXPNFC_KERNELENVSH)
++	echo 'export CROSS_COMPILE=$(NXPNFC_CROSS_COMPILE)' >> $(NXPNFC_KERNELENVSH)
++	echo 'export ARCH=$(ARCH)' >> $(NXPNFC_KERNELENVSH)
++	echo 'export KBUILD_OPTIONS=$(KBUILD_OPTIONS)' >> $(NXPNFC_KERNELENVSH)
++
++nxpnfc: $(NXPNFC_KERNELENVSH) $(NXP_NFC_SRC_PATH)
++	$(hide) if [ ${clean_build} = 1 ]; then \
++		PATH=$$PATH $(MAKE)  -C $(NXP_NFC_SRC_PATH) ANDROID=yes clean; \
++	fi
++	@ . $(NXPNFC_KERNELENVSH); $(kernel_build_shell_env) \
++	$(MAKE)  -C $(NXP_NFC_SRC_PATH) ANDROID=yes \
++		$(CLANG_TO_COMPILE) \
++		$(KERNEL_CFLAGS) \
++		ARCH=$(ARCH) \
++		DEBUG=$(DEBUG); \
++	cp $(NXP_NFC_SRC_PATH)/nfc_i2c.ko $(NXPNFC_OUT);
+-- 
+2.25.1
+

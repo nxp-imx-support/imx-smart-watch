@@ -1,0 +1,25 @@
+NXP Software Content Register
+
+Release - 1.0
+Mar 2025
+
+Outgoing License: GPL-2.0
+License File:     LICENSE.txt
+
+--------------------------------------------
+
+Package:                     imx-smart-watch
+Version:                     1.0
+Outgoing License:            GPLv2
+License File:                COPYING
+Package Category:            Graphics
+Type of Content:             binary and source
+Description and comments:    Smart watch driver and application source
+Release Location:            NA
+Origin:                      NXP (GPL-2.0)
+	 						 kernel.org (GPL-2.0) - https://www.kernel.org/
+							 Das U-Boot - Universal Bootloader (GPL-2.0) - http://www.denx.de/wiki/U-Boot/WebHome
+							 The Android Open Source Project (Apache-2.0) - https://source.android.com/
+							 arm-trusted-firmware - ARM Limited (BSD-3-clause) - http://github.com/ARM-software/arm-trusted-firmware/
+							 CMSIS Core Header files - ARM Limited (BSD-3-clause) - http://silver.arm.com
+                             CMSIS DSP Library - ARM Limited (BSD-3-clause) - http://silver.arm.com

@@ -1,0 +1,172 @@
+From 89fd2be7684868cc53f8b02b8c95afaaf0417785 Mon Sep 17 00:00:00 2001
+From: "jason.he" <jason.he_1@nxp.com>
+Date: Thu, 26 Dec 2024 09:08:25 +0000
+Subject: [PATCH] Some fix.
+
+1, Add .gitignore & nxpese.mk
+2, Fix build err
+3, Fix probe err since no ese irq
+
+Signed-off-by: jason.he <jason.he_1@nxp.com>
+---
+ .gitignore      |  9 +++++++++
+ ese/Kbuild      |  3 ++-
+ ese/ese_reset.c |  2 +-
+ ese/ese_spi.c   | 11 +++++-----
+ nxpese.mk       | 54 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 72 insertions(+), 7 deletions(-)
+ create mode 100644 .gitignore
+ create mode 100644 nxpese.mk
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..81255a4
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,9 @@
++*.o
++*.mod.*
++Module.symvers
++modules.order
++*.mod
++.*
++*.symtypes
++*.ko
++!.gitignore
+diff --git a/ese/Kbuild b/ese/Kbuild
+index db6d3de..68834e1 100644
+--- a/ese/Kbuild
++++ b/ese/Kbuild
+@@ -1,4 +1,5 @@
+-obj-$(CONFIG_NXP_ESE_P73) := p73.o
++obj-m := p73.o
+ p73-y := ese_spi.o \
+ ese_reset.o
+ ccflags-y += -DDYNAMIC_DEBUG_MODULE
++ccflags-y += $(KBUILD_OPTIONS)
+diff --git a/ese/ese_reset.c b/ese/ese_reset.c
+index 9f8aa4c..4449dd4 100644
+--- a/ese/ese_reset.c
++++ b/ese/ese_reset.c
+@@ -73,7 +73,7 @@ static long start_gpio_reset_guard_timer(void)
+ 	if (!ret)
+ 		sResetTimer.in_progress = true;
+ 	else
+-		pr_err("%s: Error in mod_timer, returned:'%d'\n", __func__, ret);
++		pr_err("%s: Error in mod_timer, returned:'%ld'\n", __func__, ret);
+ 	pr_debug("%s: exit\n", __func__);
+ 	return ret;
+ }
+diff --git a/ese/ese_spi.c b/ese/ese_spi.c
+index 012f42d..249d929 100644
+--- a/ese/ese_spi.c
++++ b/ese/ese_spi.c
+@@ -651,7 +651,8 @@ static int p61_parse_dt(struct device *dev,
+ 
+ 	data->irq_gpio = of_get_named_gpio(np, "nxp,p61-irq", 0);
+ 	if ((!gpio_is_valid(data->irq_gpio)))
+-		return -EINVAL;
++		//return -EINVAL;
++		pr_err("%s error while parsing for irq gpio\n", __func__);
+ 
+ 	data->rst_gpio = of_get_named_gpio(np, "nxp,p61-rst", 0);
+ 	if ((!gpio_is_valid(data->rst_gpio)))
+@@ -705,7 +706,7 @@ static int p61_probe(struct spi_device *spi)
+ 	ret = p61_parse_dt(&spi->dev, &platform_data1);
+ 	if (ret) {
+ 		pr_err("%s - Failed to parse DT\n", __func__);
+-		goto err_exit;
++		//goto err_exit;
+ 	}
+ 	platform_data = &platform_data1;
+ #endif
+@@ -718,7 +719,7 @@ static int p61_probe(struct spi_device *spi)
+ 	ret = p61_hw_setup(platform_data, p61_dev, spi);
+ 	if (ret < 0) {
+ 		pr_err("Failed to p61_enable_P61_IRQ_ENABLE\n");
+-		goto err_exit0;
++		//goto err_exit0;
+ 	}
+ 	spi->bits_per_word = 8;
+ 	spi->mode = SPI_MODE_0;
+@@ -819,7 +820,7 @@ err_exit:
+  *
+  */
+ 
+-static int p61_remove(struct spi_device *spi)
++static void p61_remove(struct spi_device *spi)
+ {
+ 	struct p61_dev *p61_dev = p61_get_data(spi);
+ 
+@@ -848,7 +849,7 @@ static int p61_remove(struct spi_device *spi)
+ 	}
+ 
+ 	pr_info("Exit : %s\n", __func__);
+-	return 0;
++	return;
+ }
+ 
+ #if DRAGON_P61
+diff --git a/nxpese.mk b/nxpese.mk
+new file mode 100644
+index 0000000..917badf
+--- /dev/null
++++ b/nxpese.mk
+@@ -0,0 +1,54 @@
++# Copyright 2021 NXP
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++KERNEL_SRC := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
++TARGET_ARCH := $(TARGET_KERNEL_ARCH)
++NXPESE_CROSS_COMPILE := aarch64-linux-gnu-
++
++NXP_ESE_SRC_PATH := $(NXPESE_PATH)/ese
++NXPESE_OUT := $(TARGET_OUT_INTERMEDIATES)/NXPESE_OBJ
++
++#KERNEL_CFLAGS ?= KCFLAGS=-mno-android -DDEBUG
++KERNEL_CFLAGS ?= KCFLAGS=-mno-android
++ARCH ?= $(TARGET_ARCH)
++
++KBUILD_OPTIONS := -I$(realpath $(NXPNFC_PATH)/nfc/)
++KBUILD_EXTRA_SYMBOLS := $(realpath $(NXPNFC_PATH)/nfc)/Module.symvers
++
++NXPESE_KERNELENVSH := $(NXPESE_OUT)/kernelenv.sh
++.PHONY: $(NXPESE_KERNELENVSH)
++$(NXPESE_KERNELENVSH):
++	mkdir -p $(NXPESE_OUT)
++	echo 'export KERNEL_SRC=$(KERNEL_SRC)' > $(NXPESE_KERNELENVSH)
++	echo 'export CROSS_COMPILE=$(NXPESE_CROSS_COMPILE)' >> $(NXPESE_KERNELENVSH)
++	echo 'export ARCH=$(ARCH)' >> $(NXPESE_KERNELENVSH)
++	echo 'export KBUILD_EXTRA_SYMBOLS=$(KBUILD_EXTRA_SYMBOLS)' >> $(NXPESE_KERNELENVSH)
++	echo 'export KBUILD_OPTIONS=$(KBUILD_OPTIONS)' >> $(NXPESE_KERNELENVSH)
++
++nxpese: wait_for_file $(NXPESE_KERNELENVSH) $(NXP_ESE_SRC_PATH)
++	$(hide) if [ ${clean_build} = 1 ]; then \
++		PATH=$$PATH $(MAKE)  -C $(NXP_ESE_SRC_PATH) ANDROID=yes clean; \
++	fi
++	@ . $(NXPESE_KERNELENVSH); $(kernel_build_shell_env) \
++	$(MAKE)  -C $(NXP_ESE_SRC_PATH) ANDROID=yes \
++		$(CLANG_TO_COMPILE) \
++		$(KERNEL_CFLAGS) \
++		ARCH=$(ARCH) \
++		DEBUG=$(DEBUG); \
++	cp $(NXP_ESE_SRC_PATH)/p73.ko $(NXPESE_OUT);
++
++wait_for_file:
++	@while [ ! -f $(realpath $(NXPNFC_PATH)/nfc)/Module.symvers ]; do \
++		sleep 1; \
++	done
+-- 
+2.25.1
+

@@ -1,0 +1,59 @@
+From 2696042b344a209e263a528710296dae372043aa Mon Sep 17 00:00:00 2001
+From: Jason He <jason.he_1@nxp.com>
+Date: Tue, 12 Nov 2024 18:42:33 +0900
+Subject: [PATCH] Add Android.bp
+
+Signed-off-by: Jason He <jason.he_1@nxp.com>
+---
+ Android.bp | 39 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+ create mode 100644 Android.bp
+
+diff --git a/Android.bp b/Android.bp
+new file mode 100644
+index 0000000..9a77872
+--- /dev/null
++++ b/Android.bp
+@@ -0,0 +1,39 @@
++cc_prebuilt_library_shared {
++    name: "nxpnfc_fw_sn1xx",
++    vendor: true,
++    compile_multilib: "both",
++    check_elf_files: false,
++    stem: "libsn100u_fw",
++    multilib: {
++      lib32: {
++         srcs: ["sn1xx/32-bit/libsn100u_fw.so"],
++      },
++      lib64: {
++         srcs: ["sn1xx/64-bit/libsn100u_fw.so"],
++      },
++    },
++    strip: {
++      keep_symbols: true,
++    },
++}
++
++
++cc_prebuilt_library_shared {
++    name: "nxpnfc_fw_sn300",
++    vendor: true,
++    compile_multilib: "both",
++    check_elf_files: false,
++    stem: "libsn300u_fw",
++    multilib: {
++      lib32: {
++         srcs: ["sn300/32-bit/sn300t_fw.so"],
++      },
++      lib64: {
++         srcs: ["sn300/64-bit/sn300t_fw.so"],
++      },
++    },
++    strip: {
++      keep_symbols: true,
++    },
++}
++
+-- 
+2.25.1
+

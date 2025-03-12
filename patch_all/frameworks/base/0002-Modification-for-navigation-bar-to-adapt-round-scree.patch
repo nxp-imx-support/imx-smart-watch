@@ -1,0 +1,46 @@
+From 5a1fb207c7670aa7c5c163e7eaa33dc684b692df Mon Sep 17 00:00:00 2001
+From: Jason He <jason.he_1@nxp.com>
+Date: Tue, 12 Nov 2024 17:01:10 +0900
+Subject: [PATCH 2/3] Modification for navigation bar to adapt round screen.
+
+Change-Id: I0dcd7c32ca4aa73395232440bdd823588b45812c
+Signed-off-by: Jason He <jason.he_1@nxp.com>
+---
+ core/res/res/values/dimens.xml                     | 4 ++--
+ packages/SystemUI/res/layout/navigation_layout.xml | 3 ++-
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/core/res/res/values/dimens.xml b/core/res/res/values/dimens.xml
+index 190b7a62e2e0..49ad95d02799 100644
+--- a/core/res/res/values/dimens.xml
++++ b/core/res/res/values/dimens.xml
+@@ -59,9 +59,9 @@
+          -->
+     <dimen name="quick_qs_offset_height">48dp</dimen>
+     <!-- Height of the bottom navigation / system bar. -->
+-    <dimen name="navigation_bar_height">48dp</dimen>
++    <dimen name="navigation_bar_height">72dp</dimen>
+     <!-- Height of the bottom navigation bar in portrait; often the same as @dimen/navigation_bar_height -->
+-    <dimen name="navigation_bar_height_landscape">48dp</dimen>
++    <dimen name="navigation_bar_height_landscape">72dp</dimen>
+     <!-- Width of the navigation bar when it is placed vertically on the screen -->
+     <dimen name="navigation_bar_width">48dp</dimen>
+     <!-- Height of the bottom taskbar not including decorations like rounded corners. -->
+diff --git a/packages/SystemUI/res/layout/navigation_layout.xml b/packages/SystemUI/res/layout/navigation_layout.xml
+index 46f238cbe588..b1fc621c1754 100644
+--- a/packages/SystemUI/res/layout/navigation_layout.xml
++++ b/packages/SystemUI/res/layout/navigation_layout.xml
+@@ -17,8 +17,9 @@
+ <FrameLayout
+     xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:systemui="http://schemas.android.com/apk/res-auto"
+-    android:layout_width="match_parent"
++    android:layout_width="wrap_content"
+     android:layout_height="match_parent"
++    android:layout_gravity="top|center_horizontal"
+     android:layout_marginStart="@dimen/rounded_corner_content_padding"
+     android:layout_marginEnd="@dimen/rounded_corner_content_padding"
+     android:paddingStart="@dimen/nav_content_padding"
+-- 
+2.25.1
+

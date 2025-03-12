@@ -1,0 +1,488 @@
+From a24a7ab0cacd60cc552ed33db4383953542b11a7 Mon Sep 17 00:00:00 2001
+From: Jason He <jason.he_1@nxp.com>
+Date: Wed, 17 Apr 2024 17:54:31 +0900
+Subject: [PATCH 3/3] Modification for NFC
+
+1, Copy from NFC_AR_00_3E800_14.0E.00_OpnSrc except core/tests/nfctests/
+
+Change-Id: I9c81c76b23a31fd31894cdf11d128981496dee50
+Signed-off-by: Jason He <jason.he_1@nxp.com>
+---
+ .../java/android/nfc/AvailableNfcAntenna.java |   2 +-
+ core/java/android/nfc/INfcAdapter.aidl        |  21 +++
+ core/java/android/nfc/NfcAdapter.java         | 121 ++++++++++--------
+ core/java/android/nfc/Tag.java                |  23 +++-
+ .../nfc/cardemulation/CardEmulation.java      |  29 ++++-
+ .../nfc/cardemulation/NfcFCardEmulation.java  |  23 +++-
+ core/java/android/nfc/tech/TagTechnology.java |  27 +++-
+ 7 files changed, 180 insertions(+), 66 deletions(-)
+
+diff --git a/core/java/android/nfc/AvailableNfcAntenna.java b/core/java/android/nfc/AvailableNfcAntenna.java
+index 6e6512a04971..3e029cdeb35e 100644
+--- a/core/java/android/nfc/AvailableNfcAntenna.java
++++ b/core/java/android/nfc/AvailableNfcAntenna.java
+@@ -27,7 +27,7 @@ import android.os.Parcelable;
+  */
+ public final class AvailableNfcAntenna implements Parcelable {
+     /**
+-     * Location of the antenna on the Y axis in millimeters.
++     * Location of the antenna on the X axis in millimeters.
+      * 0 is the bottom-left when the user is facing the screen
+      * and the device orientation is Portrait.
+      */
+diff --git a/core/java/android/nfc/INfcAdapter.aidl b/core/java/android/nfc/INfcAdapter.aidl
+index a6d8cafe8263..fa721cf36ef6 100644
+--- a/core/java/android/nfc/INfcAdapter.aidl
++++ b/core/java/android/nfc/INfcAdapter.aidl
+@@ -13,6 +13,26 @@
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
++ /******************************************************************************
++  *
++  *  The original Work has been changed by NXP.
++  *
++  *  Copyright 2015-2018,2020 NXP
++  *
++  *  Licensed under the Apache License, Version 2.0 (the "License");
++  *  you may not use this file except in compliance with the License.
++  *  You may obtain a copy of the License at
++  *
++  *  http://www.apache.org/licenses/LICENSE-2.0
++  *
++  *  Unless required by applicable law or agreed to in writing, software
++  *  distributed under the License is distributed on an "AS IS" BASIS,
++  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++  *  See the License for the specific language governing permissions and
++  *  limitations under the License.
++  *
++ ******************************************************************************/
++
+ 
+ package android.nfc;
+ 
+@@ -79,4 +99,5 @@ interface INfcAdapter
+     Map getTagIntentAppPreferenceForUser(int userId);
+     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS)")
+     int setTagIntentAppPreferenceForUser(int userId, String pkg, boolean allow);
++    IBinder getNfcAdapterVendorInterface(in String vendor);
+ }
+diff --git a/core/java/android/nfc/NfcAdapter.java b/core/java/android/nfc/NfcAdapter.java
+index 9e97216ac632..a9eb672c4e4d 100644
+--- a/core/java/android/nfc/NfcAdapter.java
++++ b/core/java/android/nfc/NfcAdapter.java
+@@ -26,8 +26,6 @@ import android.annotation.SdkConstant.SdkConstantType;
+ import android.annotation.SystemApi;
+ import android.annotation.UserIdInt;
+ import android.app.Activity;
+-import android.app.ActivityThread;
+-import android.app.OnActivityPausedListener;
+ import android.app.PendingIntent;
+ import android.compat.annotation.UnsupportedAppUsage;
+ import android.content.Context;
+@@ -602,6 +600,17 @@ public final class NfcAdapter {
+         return offHostSE;
+     }
+ 
++    private static void retrieveServiceRegisterer() {
++        if (sServiceRegisterer == null) {
++            NfcServiceManager manager = NfcFrameworkInitializer.getNfcServiceManager();
++            if (manager == null) {
++                Log.e(TAG, "NfcServiceManager is null");
++                throw new UnsupportedOperationException();
++            }
++            sServiceRegisterer = manager.getNfcManagerServiceRegisterer();
++        }
++    }
++
+     /**
+      * Returns the NfcAdapter for application context,
+      * or throws if NFC is not available.
+@@ -629,12 +638,7 @@ public final class NfcAdapter {
+                 Log.v(TAG, "this device does not have NFC support");
+                 throw new UnsupportedOperationException();
+             }
+-            NfcServiceManager manager = NfcFrameworkInitializer.getNfcServiceManager();
+-            if (manager == null) {
+-                Log.e(TAG, "NfcServiceManager is null");
+-                throw new UnsupportedOperationException();
+-            }
+-            sServiceRegisterer = manager.getNfcManagerServiceRegisterer();
++            retrieveServiceRegisterer();
+             sService = getServiceInterface();
+             if (sService == null) {
+                 Log.e(TAG, "could not retrieve NFC service");
+@@ -644,6 +648,7 @@ public final class NfcAdapter {
+                 try {
+                     sTagService = sService.getNfcTagInterface();
+                 } catch (RemoteException e) {
++                    sTagService = null;
+                     Log.e(TAG, "could not retrieve NFC Tag service");
+                     throw new UnsupportedOperationException();
+                 }
+@@ -652,12 +657,14 @@ public final class NfcAdapter {
+                 try {
+                     sNfcFCardEmulationService = sService.getNfcFCardEmulationInterface();
+                 } catch (RemoteException e) {
++                    sNfcFCardEmulationService = null;
+                     Log.e(TAG, "could not retrieve NFC-F card emulation service");
+                     throw new UnsupportedOperationException();
+                 }
+                 try {
+                     sCardEmulationService = sService.getNfcCardEmulationInterface();
+                 } catch (RemoteException e) {
++                    sCardEmulationService = null;
+                     Log.e(TAG, "could not retrieve card emulation service");
+                     throw new UnsupportedOperationException();
+                 }
+@@ -705,11 +712,13 @@ public final class NfcAdapter {
+             throw new IllegalArgumentException(
+                     "context not associated with any application (using a mock context?)");
+         }
+-
+-        if (sIsInitialized && sServiceRegisterer.tryGet() == null) {
+-            synchronized (NfcAdapter.class) {
+-                /* Stale sService pointer */
+-                if (sIsInitialized) sIsInitialized = false;
++        retrieveServiceRegisterer();
++        if (sServiceRegisterer.tryGet() == null) {
++            if (sIsInitialized) {
++                synchronized (NfcAdapter.class) {
++                    /* Stale sService pointer */
++                    if (sIsInitialized) sIsInitialized = false;
++                }
+             }
+             return null;
+         }
+@@ -841,30 +850,54 @@ public final class NfcAdapter {
+         // assigning to sService is not thread-safe, but this is best-effort code
+         // and on a well-behaved system should never happen
+         sService = service;
+-        try {
+-            sTagService = service.getNfcTagInterface();
+-        } catch (RemoteException ee) {
+-            Log.e(TAG, "could not retrieve NFC tag service during service recovery");
+-            // nothing more can be done now, sService is still stale, we'll hit
+-            // this recovery path again later
+-            return;
++        if (sHasNfcFeature) {
++            try {
++                sTagService = service.getNfcTagInterface();
++            } catch (RemoteException ee) {
++                sTagService = null;
++                Log.e(TAG, "could not retrieve NFC tag service during service recovery");
++                // nothing more can be done now, sService is still stale, we'll hit
++                // this recovery path again later
++                return;
++            }
+         }
+ 
+-        try {
+-            sCardEmulationService = service.getNfcCardEmulationInterface();
+-        } catch (RemoteException ee) {
+-            Log.e(TAG, "could not retrieve NFC card emulation service during service recovery");
+-        }
++        if (sHasCeFeature) {
++            try {
++                sCardEmulationService = service.getNfcCardEmulationInterface();
++            } catch (RemoteException ee) {
++                sCardEmulationService = null;
++                Log.e(TAG,
++                        "could not retrieve NFC card emulation service during service recovery");
++            }
+ 
+-        try {
+-            sNfcFCardEmulationService = service.getNfcFCardEmulationInterface();
+-        } catch (RemoteException ee) {
+-            Log.e(TAG, "could not retrieve NFC-F card emulation service during service recovery");
++            try {
++                sNfcFCardEmulationService = service.getNfcFCardEmulationInterface();
++            } catch (RemoteException ee) {
++                sNfcFCardEmulationService = null;
++                Log.e(TAG,
++                        "could not retrieve NFC-F card emulation service during service recovery");
++            }
+         }
+ 
+         return;
+     }
+ 
++    private boolean isCardEmulationEnabled() {
++        if (sHasCeFeature) {
++            return (sCardEmulationService != null || sNfcFCardEmulationService != null);
++        }
++        return false;
++    }
++
++    private boolean isTagReadingEnabled() {
++        if (sHasNfcFeature) {
++            return sTagService != null;
++        }
++        return false;
++    }
++
++
+     /**
+      * Return true if this NFC Adapter has any features enabled.
+      *
+@@ -878,8 +911,9 @@ public final class NfcAdapter {
+      * @return true if this NFC Adapter has any features enabled
+      */
+     public boolean isEnabled() {
++        boolean serviceState = false;
+         try {
+-            return sService.getState() == STATE_ON;
++            serviceState = sService.getState() == STATE_ON;
+         } catch (RemoteException e) {
+             attemptDeadServiceRecovery(e);
+             // Try one more time
+@@ -888,12 +922,12 @@ public final class NfcAdapter {
+                 return false;
+             }
+             try {
+-                return sService.getState() == STATE_ON;
++                serviceState = sService.getState() == STATE_ON;
+             } catch (RemoteException ee) {
+                 Log.e(TAG, "Failed to recover NFC Service.");
+             }
+-            return false;
+         }
++        return serviceState && (isTagReadingEnabled() || isCardEmulationEnabled());
+     }
+ 
+     /**
+@@ -1473,17 +1507,11 @@ public final class NfcAdapter {
+         if (activity == null || intent == null) {
+             throw new NullPointerException();
+         }
+-        if (!activity.isResumed()) {
+-            throw new IllegalStateException("Foreground dispatch can only be enabled " +
+-                    "when your activity is resumed");
+-        }
+         try {
+             TechListParcel parcel = null;
+             if (techLists != null && techLists.length > 0) {
+                 parcel = new TechListParcel(techLists);
+             }
+-            ActivityThread.currentActivityThread().registerOnActivityPausedListener(activity,
+-                    mForegroundDispatchListener);
+             sService.setForegroundDispatch(intent, filters, parcel);
+         } catch (RemoteException e) {
+             attemptDeadServiceRecovery(e);
+@@ -1511,25 +1539,8 @@ public final class NfcAdapter {
+                 throw new UnsupportedOperationException();
+             }
+         }
+-        ActivityThread.currentActivityThread().unregisterOnActivityPausedListener(activity,
+-                mForegroundDispatchListener);
+-        disableForegroundDispatchInternal(activity, false);
+-    }
+-
+-    OnActivityPausedListener mForegroundDispatchListener = new OnActivityPausedListener() {
+-        @Override
+-        public void onPaused(Activity activity) {
+-            disableForegroundDispatchInternal(activity, true);
+-        }
+-    };
+-
+-    void disableForegroundDispatchInternal(Activity activity, boolean force) {
+         try {
+             sService.setForegroundDispatch(null, null, null);
+-            if (!force && !activity.isResumed()) {
+-                throw new IllegalStateException("You must disable foreground dispatching " +
+-                        "while your activity is still resumed");
+-            }
+         } catch (RemoteException e) {
+             attemptDeadServiceRecovery(e);
+         }
+diff --git a/core/java/android/nfc/Tag.java b/core/java/android/nfc/Tag.java
+index 500038f14d9d..3ca703539cda 100644
+--- a/core/java/android/nfc/Tag.java
++++ b/core/java/android/nfc/Tag.java
+@@ -13,7 +13,25 @@
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
+-
++/******************************************************************************
++*
++*  The original Work has been changed by NXP.
++*
++*  Licensed under the Apache License, Version 2.0 (the "License");
++*  you may not use this file except in compliance with the License.
++*  You may obtain a copy of the License at
++*
++*  http://www.apache.org/licenses/LICENSE-2.0
++*
++*  Unless required by applicable law or agreed to in writing, software
++*  distributed under the License is distributed on an "AS IS" BASIS,
++*  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++*  See the License for the specific language governing permissions and
++*  limitations under the License.
++*
++*  Copyright 2021 NXP
++*
++******************************************************************************/
+ package android.nfc;
+ 
+ import android.compat.annotation.UnsupportedAppUsage;
+@@ -198,6 +216,9 @@ public final class Tag implements Parcelable {
+                 case TagTechnology.NFC_BARCODE:
+                     strings[i] = NfcBarcode.class.getName();
+                     break;
++                case TagTechnology.NFC_Q:
++                    strings[i] = "NfcQ";
++                    break;
+                 default:
+                     throw new IllegalArgumentException("Unknown tech type " + techList[i]);
+             }
+diff --git a/core/java/android/nfc/cardemulation/CardEmulation.java b/core/java/android/nfc/cardemulation/CardEmulation.java
+index ac3344e91c06..9b3cf1954c9a 100644
+--- a/core/java/android/nfc/cardemulation/CardEmulation.java
++++ b/core/java/android/nfc/cardemulation/CardEmulation.java
+@@ -13,6 +13,25 @@
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
++ /******************************************************************************
++*
++*  The original Work has been changed by NXP.
++*
++*  Licensed under the Apache License, Version 2.0 (the "License");
++*  you may not use this file except in compliance with the License.
++*  You may obtain a copy of the License at
++*
++*  http://www.apache.org/licenses/LICENSE-2.0
++*
++*  Unless required by applicable law or agreed to in writing, software
++*  distributed under the License is distributed on an "AS IS" BASIS,
++*  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++*  See the License for the specific language governing permissions and
++*  limitations under the License.
++*
++*  Copyright 2019-2020 NXP
++*
++******************************************************************************/
+ 
+ package android.nfc.cardemulation;
+ 
+@@ -594,9 +613,6 @@ public final class CardEmulation {
+         if (activity == null || service == null) {
+             throw new NullPointerException("activity or service or category is null");
+         }
+-        if (!activity.isResumed()) {
+-            throw new IllegalArgumentException("Activity must be resumed.");
+-        }
+         try {
+             return sService.setPreferredService(service);
+         } catch (RemoteException e) {
+@@ -629,9 +645,6 @@ public final class CardEmulation {
+         if (activity == null) {
+             throw new NullPointerException("activity is null");
+         }
+-        if (!activity.isResumed()) {
+-            throw new IllegalArgumentException("Activity must be resumed.");
+-        }
+         try {
+             return sService.unsetPreferredService();
+         } catch (RemoteException e) {
+@@ -943,7 +956,9 @@ public final class CardEmulation {
+ 
+     void recoverService() {
+         NfcAdapter adapter = NfcAdapter.getDefaultAdapter(mContext);
+-        sService = adapter.getCardEmulationService();
++        if (adapter != null)  {
++            sService = adapter.getCardEmulationService();
++        }
+     }
+ 
+ }
+diff --git a/core/java/android/nfc/cardemulation/NfcFCardEmulation.java b/core/java/android/nfc/cardemulation/NfcFCardEmulation.java
+index 48bbf5b61052..5f30ff291591 100644
+--- a/core/java/android/nfc/cardemulation/NfcFCardEmulation.java
++++ b/core/java/android/nfc/cardemulation/NfcFCardEmulation.java
+@@ -13,6 +13,25 @@
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
++ /******************************************************************************
++*
++*  The original Work has been changed by NXP.
++*
++*  Licensed under the Apache License, Version 2.0 (the "License");
++*  you may not use this file except in compliance with the License.
++*  You may obtain a copy of the License at
++*
++*  http://www.apache.org/licenses/LICENSE-2.0
++*
++*  Unless required by applicable law or agreed to in writing, software
++*  distributed under the License is distributed on an "AS IS" BASIS,
++*  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++*  See the License for the specific language governing permissions and
++*  limitations under the License.
++*
++*  Copyright 2019 NXP
++*
++******************************************************************************/
+ 
+ package android.nfc.cardemulation;
+ 
+@@ -466,7 +485,9 @@ public final class NfcFCardEmulation {
+ 
+     void recoverService() {
+         NfcAdapter adapter = NfcAdapter.getDefaultAdapter(mContext);
+-        sService = adapter.getNfcFCardEmulationService();
++        if (adapter != null) {
++            sService = adapter.getNfcFCardEmulationService();
++        }
+     }
+ 
+ }
+diff --git a/core/java/android/nfc/tech/TagTechnology.java b/core/java/android/nfc/tech/TagTechnology.java
+index 839fe429b338..f2f8ba041500 100644
+--- a/core/java/android/nfc/tech/TagTechnology.java
++++ b/core/java/android/nfc/tech/TagTechnology.java
+@@ -13,7 +13,25 @@
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
+-
++/******************************************************************************
++*
++*  The original Work has been changed by NXP.
++*
++*  Licensed under the Apache License, Version 2.0 (the "License");
++*  you may not use this file except in compliance with the License.
++*  You may obtain a copy of the License at
++*
++*  http://www.apache.org/licenses/LICENSE-2.0
++*
++*  Unless required by applicable law or agreed to in writing, software
++*  distributed under the License is distributed on an "AS IS" BASIS,
++*  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++*  See the License for the specific language governing permissions and
++*  limitations under the License.
++*
++*  Copyright 2021 NXP
++*
++******************************************************************************/
+ package android.nfc.tech;
+ 
+ import android.nfc.Tag;
+@@ -157,6 +175,13 @@ public interface TagTechnology extends Closeable {
+      */
+     public static final int NFC_BARCODE = 10;
+ 
++    /**
++     * This technology is an instance of {@link NfcQ}.
++     * <p>Support for this technology type is mandatory.
++     * @hide
++     */
++    public static final int NFC_Q = 11;
++
+     /**
+      * Get the {@link Tag} object backing this {@link TagTechnology} object.
+      * @return the {@link Tag} backing this {@link TagTechnology} object.
+-- 
+2.25.1
+

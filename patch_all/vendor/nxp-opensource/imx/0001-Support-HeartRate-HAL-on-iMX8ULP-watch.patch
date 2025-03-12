@@ -1,0 +1,315 @@
+From 431857cf023a5603ae2a67de98c9d21f5736e5b6 Mon Sep 17 00:00:00 2001
+From: "Jason.He" <jason.he_1@nxp.com>
+Date: Tue, 2 Jan 2024 16:00:25 +0800
+Subject: [PATCH] Support HeartRate HAL on iMX8ULP watch
+
+Signed-off-by: Jason.He <jason.he_1@nxp.com>
+---
+ iio_sensor/HeartRateSensor.cpp | 111 +++++++++++++++++++++++++++++++++
+ iio_sensor/HeartRateSensor.h   |  38 +++++++++++
+ iio_sensor/Sensor.cpp          |   3 +
+ iio_sensor/SensorsSubHal.cpp   |   1 +
+ iio_sensor/iio_sensor.go       |   1 +
+ iio_sensor/iio_utils.cpp       |  29 +++++++++
+ iio_sensor/iio_utils.h         |   2 +
+ 7 files changed, 185 insertions(+)
+ create mode 100644 iio_sensor/HeartRateSensor.cpp
+ create mode 100644 iio_sensor/HeartRateSensor.h
+
+diff --git a/iio_sensor/HeartRateSensor.cpp b/iio_sensor/HeartRateSensor.cpp
+new file mode 100644
+index 0000000..b1a3c85
+--- /dev/null
++++ b/iio_sensor/HeartRateSensor.cpp
+@@ -0,0 +1,111 @@
++/*
++ * Copyright 2021 NXP.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#include "HeartRateSensor.h"
++
++namespace nxp_sensors_subhal {
++
++HeartRateSensor::HeartRateSensor(int32_t sensorHandle, ISensorsEventCallback* callback,
++               struct iio_device_data& iio_data,
++           const std::optional<std::vector<Configuration>>& config)
++	: HWSensorBase(sensorHandle, callback, iio_data, config)  {
++    // no power_microwatts sys node, so mSensorInfo.power fake the default one.
++    mSensorInfo.power = 0.001f;
++    mSensorInfo.flags |= SensorFlagBits::DATA_INJECTION | SensorFlagBits::ON_CHANGE_MODE;
++
++    mSensorInfo.minDelay = 500;
++    mSensorInfo.maxDelay = 3600000;
++    mSensorInfo.maxRange = 1e100;
++    mSysfspath = iio_data.sysfspath;
++
++    mRunThread = std::thread(std::bind(&HeartRateSensor::run, this));
++}
++
++HeartRateSensor::~HeartRateSensor() {
++    {
++        std::unique_lock<std::mutex> lock(mRunMutex);
++        mStopThread = true;
++        mIsEnabled = false;
++        mWaitCV.notify_all();
++    }
++    mRunThread.join();
++}
++
++void HeartRateSensor::activate(bool enable) {
++    if (mIsEnabled != enable) {
++        mIsEnabled = enable;
++        enable_heartrate_sensor(mIioData.sysfspath, enable);
++        mWaitCV.notify_all();
++    }
++}
++
++void HeartRateSensor::processScanData(Event* evt) {
++    unsigned int heartratecounter;
++    evt->sensorHandle = mSensorInfo.sensorHandle;
++    evt->sensorType = mSensorInfo.type;
++    get_sensor_heartratecounter(mSysfspath, &heartratecounter);
++    evt->timestamp = get_timestamp();
++    evt->u.heartRate.bpm = (float)heartratecounter;
++    evt->u.heartRate.status = SensorStatus::ACCURACY_HIGH;
++}
++
++bool HeartRateSensor::supportsDataInjection() const {
++    return mSensorInfo.flags & static_cast<uint32_t>(SensorFlagBits::DATA_INJECTION);
++}
++
++Result HeartRateSensor::injectEvent(const Event& event) {
++    Result result = Result::OK;
++    if (event.sensorType == SensorType::ADDITIONAL_INFO) {
++        // When in OperationMode::NORMAL, SensorType::ADDITIONAL_INFO is used to push operation
++        // environment data into the device.
++    } else if (!supportsDataInjection()) {
++        result = Result::INVALID_OPERATION;
++    } else if (mMode == OperationMode::DATA_INJECTION) {
++        mCallback->postEvents(std::vector<Event>{event}, isWakeUpSensor());
++    } else {
++        result = Result::BAD_VALUE;
++    }
++    return result;
++}
++
++void HeartRateSensor::setOperationMode(OperationMode mode) {
++    std::unique_lock<std::mutex> lock(mRunMutex);
++    if (mMode != mode) {
++        mMode = mode;
++        mWaitCV.notify_all();
++    }
++}
++
++void HeartRateSensor::run() {
++    Event event;
++    std::vector<Event> events;
++    while (!mStopThread) {
++        if (!mIsEnabled || mMode == OperationMode::DATA_INJECTION) {
++            std::unique_lock<std::mutex> runLock(mRunMutex);
++            mWaitCV.wait(runLock, [&] {
++                return ((mIsEnabled && mMode == OperationMode::NORMAL) || mStopThread);
++            });
++        } else {
++            usleep(500000);
++            events.clear();
++            processScanData(&event);
++            events.push_back(event);
++            mCallback->postEvents(events, isWakeUpSensor());
++        }
++    }
++}
++
++}  // namespace nxp_sensors_subhal
+diff --git a/iio_sensor/HeartRateSensor.h b/iio_sensor/HeartRateSensor.h
+new file mode 100644
+index 0000000..18103ac
+--- /dev/null
++++ b/iio_sensor/HeartRateSensor.h
+@@ -0,0 +1,38 @@
++/*
++ * Copyright 2021 NXP.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#pragma once
++#include "Sensor.h"
++
++namespace nxp_sensors_subhal {
++// HWSensorBase represents the actual physical sensor provided as the IIO device
++class HeartRateSensor : public HWSensorBase {
++  public:
++    HeartRateSensor(int32_t sensorHandle, ISensorsEventCallback* callback,
++           struct iio_device_data& iio_data,
++           const std::optional<std::vector<Configuration>>& config);
++    ~HeartRateSensor();
++    void run();
++    void activate(bool enable);
++    void processScanData(Event* evt);
++    void setOperationMode(OperationMode mode);
++    bool supportsDataInjection() const;
++    Result injectEvent(const Event& event);
++  private:
++    std::string mSysfspath;
++};
++
++}  // namespace nxp_sensors_subhal
+diff --git a/iio_sensor/Sensor.cpp b/iio_sensor/Sensor.cpp
+index 73aac81..952e783 100644
+--- a/iio_sensor/Sensor.cpp
++++ b/iio_sensor/Sensor.cpp
+@@ -25,6 +25,7 @@
+ #include "PressureSensor.h"
+ #else
+ #include "StepCounterSensor.h"
++#include "HeartRateSensor.h"
+ #endif
+ 
+ namespace nxp_sensors_subhal {
+@@ -450,6 +451,8 @@ HWSensorBase* HWSensorBase::buildSensor(int32_t sensorHandle, ISensorsEventCallb
+ #ifdef CONFIG_SENSOR_PEDOMETER
+     if (iio_data.type == SensorType::STEP_COUNTER)
+         return new StepCounterSensor(sensorHandle, callback, iio_data, config);
++    else if (iio_data.type == SensorType::HEART_RATE)
++        return new HeartRateSensor(sensorHandle, callback, iio_data, config);
+ #endif
+     return nullptr;
+ }
+diff --git a/iio_sensor/SensorsSubHal.cpp b/iio_sensor/SensorsSubHal.cpp
+index 79b6c93..c78f8bc 100644
+--- a/iio_sensor/SensorsSubHal.cpp
++++ b/iio_sensor/SensorsSubHal.cpp
+@@ -58,6 +58,7 @@ static const std::vector<sensors_supported_hal> sensors_supported = {
+ #else
+ static const std::vector<sensors_supported_hal> sensors_supported = {
+         SENSOR_SUPPORTED("rpmsg-iio-pedometer", SensorType::STEP_COUNTER),
++        SENSOR_SUPPORTED("rpmsg-iio-pedometer", SensorType::HEART_RATE),
+ };
+ #endif
+ 
+diff --git a/iio_sensor/iio_sensor.go b/iio_sensor/iio_sensor.go
+index 241c74c..f22da25 100644
+--- a/iio_sensor/iio_sensor.go
++++ b/iio_sensor/iio_sensor.go
+@@ -47,6 +47,7 @@ func iio_sensorDefaults(ctx android.LoadHookContext) {
+ 	} else if ctx.Config().VendorConfig("IMXPLUGIN").Bool("BOARD_USE_SENSOR_PEDOMETER") {
+ 		p.Target.Android.Enabled = proptools.BoolPtr(true)
+ 		p.Target.Android.Srcs = append(p.Target.Android.Srcs, "StepCounterSensor.cpp")
++		p.Target.Android.Srcs = append(p.Target.Android.Srcs, "HeartRateSensor.cpp")
+ 		p.Target.Android.Cppflags = append(p.Target.Android.Cppflags, "-DCONFIG_SENSOR_PEDOMETER")
+ 	}
+ 
+diff --git a/iio_sensor/iio_utils.cpp b/iio_sensor/iio_utils.cpp
+index edf538a..b3e0092 100644
+--- a/iio_sensor/iio_utils.cpp
++++ b/iio_sensor/iio_utils.cpp
+@@ -42,6 +42,7 @@ static const char* IIO_SCALE_FILENAME = "_scale";
+ static const char* IIO_SAMPLING_FREQUENCY = "_sampling_frequency";
+ static const char* IIO_BUFFER_ENABLE = "buffer/enable";
+ static const char* IIO_STEP_BUFFER_ENABLE = "in_steps_en";
++static const char* IIO_ACTIVITY_BUFFER_ENABLE = "in_activity_en";
+ static const char* IIO_BUFFER_LENGTH = "buffer/length";
+ static const char* IIO_POWER_FILENAME = "sensor_power";
+ static const char* IIO_MAX_RANGE_FILENAME = "sensor_max_range";
+@@ -52,6 +53,8 @@ static const char* IIO_TRIGGER = "/sys/devices/iio_sysfs_trigger/";
+ static const char* IIO_HRTIMER_TRIGGER = "/config/iio/triggers/hrtimer/";
+ static const char* IIO_CURRENT_TRIGGER = "/trigger/current_trigger";
+ static const char* IIO_DATA_TRIGGER = "/sys/bus/iio/devices/iio_sysfs_trigger/";
++static const char* IIO_HEARTRATE_BUFFER_ENABLE = "in_count_en";
++static const char* IIO_HEARTRATECOUNTER_INPUT = "/events/in_count_change_value";
+ 
+ namespace nxp_sensors_subhal {
+ 
+@@ -109,6 +112,10 @@ static int sysfs_opendir(const std::string& name, DirPtr* dp) {
+ // from the type of value being passed in? that would be a safer alternative
+ template <typename T>
+ static int sysfs_write_val(const std::string& f, const std::string& fmt, const T value) {
++    std::string str = "sysfs_write_val %s ";
++    str += fmt;
++    str += "\n";
++    ALOGE(str.c_str(), f.c_str(), value);
+     FilePtr fp = {fopen(f.c_str(), "r+"), fclose};
+     if (nullptr == fp)
+         return -errno;
+@@ -204,6 +211,22 @@ int enable_step_sensor(const std::string& device_dir, const bool enable) {
+         enable_file += "/";
+         enable_file += IIO_STEP_BUFFER_ENABLE;
+         err = sysfs_write_uint(enable_file, enable);
++
++        enable_file = device_dir;
++        enable_file += "/";
++        enable_file += IIO_ACTIVITY_BUFFER_ENABLE;
++        err = sysfs_write_uint(enable_file, enable);
++    }
++    return err;
++}
++
++int enable_heartrate_sensor(const std::string& device_dir, const bool enable) {
++    int err = check_file(device_dir);
++    if (!err) {
++        std::string enable_file = device_dir;
++        enable_file += "/";
++        enable_file += IIO_HEARTRATE_BUFFER_ENABLE;
++        err = sysfs_write_uint(enable_file, enable);
+     }
+     return err;
+ }
+@@ -410,6 +433,12 @@ int get_sensor_stepcounter(const std::string& device_dir, unsigned int* stepcoun
+     return sysfs_read_uint(filename, stepcounter);
+ }
+ 
++int get_sensor_heartratecounter(const std::string& device_dir, unsigned int* heartratecounter) {
++    const std::string filename = device_dir + "/" + IIO_HEARTRATECOUNTER_INPUT;
++
++    return sysfs_read_uint(filename, heartratecounter);
++}
++
+ int64_t get_timestamp() {
+     struct timespec ts;
+ 
+diff --git a/iio_sensor/iio_utils.h b/iio_sensor/iio_utils.h
+index fa31a14..7fa4752 100644
+--- a/iio_sensor/iio_utils.h
++++ b/iio_sensor/iio_utils.h
+@@ -72,6 +72,7 @@ int load_iio_devices(std::vector<iio_device_data>* iio_data,
+ int scan_elements(const std::string& device_dir, struct iio_device_data* iio_data);
+ int enable_sensor(const std::string& name, const bool flag);
+ int enable_step_sensor(const std::string& name, const bool flag);
++int enable_heartrate_sensor(const std::string& device_dir, const bool enable);
+ int set_sampling_frequency(const std::string& name, const double frequency);
+ int get_sampling_available(const std::string& time_file, std::vector<double>* sfa);
+ int get_sampling_time_available(const std::string& file, std::vector<double>* sfa);
+@@ -80,6 +81,7 @@ int get_sensor_light(const std::string& device_dir, unsigned int* light);
+ int get_sensor_stepcounter(const std::string& device_dir, unsigned int* stepcounter);
+ int add_trigger(const std::string& device_dir, uint8_t dev_num, const bool enable);
+ int add_hrtimer_trigger(const std::string& device_dir, uint8_t dev_num, const bool enable);
++int get_sensor_heartratecounter(const std::string& device_dir, unsigned int* heartratecounter);
+ int trigger_data(int dev_num);
+ int64_t get_timestamp();
+ int get_pressure_scale(const std::string& file, float* scale);
+-- 
+2.25.1
+

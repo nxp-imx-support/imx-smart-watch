@@ -1,0 +1,360 @@
+From dad8646a3b199a2463ff28a290efe4aa0975d802 Mon Sep 17 00:00:00 2001
+From: Jason He <jason.he_1@nxp.com>
+Date: Tue, 12 Nov 2024 17:52:26 +0900
+Subject: [PATCH 2/3] Adaptive modification
+
+1, Path fix.
+2, Support for SN300.
+3, Fix for android.hardware.secure_element, android.hardware.nfc.
+4, Fix for POLLING_TECH_MASK, NXP_SYS_CLK_SRC_SEL, NXP_ENABLE_DCDC_ON.
+
+Signed-off-by: Jason He <jason.he_1@nxp.com>
+---
+ nxp/SNxxx/BoardConfigNfc.mk                   | 66 ++++++++---------
+ nxp/SNxxx/device-nfc.mk                       | 72 ++++++++++---------
+ nxp/SNxxx/framework_compatibility_matrix.xml  |  6 +-
+ .../SN300/fmct-config-files/libnfc-nci.conf   |  2 +-
+ .../libnfc-nxp-SN300U_example.conf            |  2 +-
+ .../libnfc-nxp_RF-SN300U_example.conf         |  2 +-
+ nxp/SNxxx/manifest.xml                        |  5 +-
+ nxp/SNxxx/manifestEse.xml                     | 18 +++--
+ 8 files changed, 93 insertions(+), 80 deletions(-)
+
+diff --git a/nxp/SNxxx/BoardConfigNfc.mk b/nxp/SNxxx/BoardConfigNfc.mk
+index 7365019..0fe4077 100755
+--- a/nxp/SNxxx/BoardConfigNfc.mk
++++ b/nxp/SNxxx/BoardConfigNfc.mk
+@@ -1,32 +1,34 @@
+-# Copyright 2018 The Android Open Source Project
+-#
+-# Licensed under the Apache License, Version 2.0 (the "License");
+-# you may not use this file except in compliance with the License.
+-# You may obtain a copy of the License at
+-#
+-#      http://www.apache.org/licenses/LICENSE-2.0
+-#
+-# Unless required by applicable law or agreed to in writing, software
+-# distributed under the License is distributed on an "AS IS" BASIS,
+-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-# See the License for the specific language governing permissions and
+-# limitations under the License.
+-
+-LOCAL_STEM := nfc/BoardConfigNfcPartial.mk
+-
+-#BOARD_KERNEL_CMDLINE += androidboot.selinux=permissive
+-BOARD_KERNEL_CMDLINE += video=HDMI-A-1:1280x800@60
+-
+-DEVICE_FRAMEWORK_COMPATIBILITY_MATRIX_FILE := vendor/nxp/SNxxx/framework_compatibility_matrix.xml
+-
+-PRODUCT_MANIFEST_FILES += packages/apps/SecureElement/secure_element-service.xml
+-
+-DEVICE_MANIFEST_FILE += vendor/nxp/SNxxx/manifest.xml
+-
+-ifneq ($(SE_ENABLED),FALSE)
+-	DEVICE_MANIFEST_FILE += vendor/nxp/SNxxx/manifestEse.xml
+-endif
+-
+-TARGET_FS_CONFIG_GEN += vendor/nxp/SNxxx/config.fs
+-
+--include vendor/nxp/$(LOCAL_STEM)
++# Copyright 2018 The Android Open Source Project
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++LOCAL_STEM := nfc/BoardConfigNfcPartial.mk
++NXP_VENDOR_NFC_DIR := nxp-opensource/NXPNFC_Reference/nxp
++
++#BOARD_KERNEL_CMDLINE += androidboot.selinux=permissive
++BOARD_KERNEL_CMDLINE += video=HDMI-A-1:1280x800@60
++
++DEVICE_FRAMEWORK_COMPATIBILITY_MATRIX_FILE += vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/framework_compatibility_matrix.xml
++
++PRODUCT_MANIFEST_FILES += packages/apps/SecureElement/secure_element-service.xml
++
++DEVICE_MANIFEST_FILE += vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/manifest.xml
++
++SE_ENABLED := TRUE
++ifneq ($(SE_ENABLED),FALSE)
++	DEVICE_MANIFEST_FILE += vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/manifestEse.xml
++endif
++
++TARGET_FS_CONFIG_GEN += vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/config.fs
++
++-include vendor/$(NXP_VENDOR_NFC_DIR)/$(LOCAL_STEM)
+diff --git a/nxp/SNxxx/device-nfc.mk b/nxp/SNxxx/device-nfc.mk
+index d018d11..b7b1f04 100755
+--- a/nxp/SNxxx/device-nfc.mk
++++ b/nxp/SNxxx/device-nfc.mk
+@@ -2,6 +2,7 @@
+ ##### NXP NFC Device Configuration makefile
+ ######
+ 
++TARGET_NXP_NFC_HW := SN300
+ NXP_NFC_HOST := $(TARGET_PRODUCT)
+ ifndef TARGET_NXP_NFC_HW
+ NXP_NFC_HW := SN220
+@@ -9,7 +10,7 @@ else
+ NXP_NFC_HW := $(TARGET_NXP_NFC_HW)
+ endif
+ NXP_NFC_PLATFORM := SNxxx
+-NXP_VENDOR_DIR := nxp
++NXP_VENDOR_NFC_DIR := nxp-opensource/NXPNFC_Reference/nxp
+ 
+ # Variable to enable/disable power tracker feature.
+ # By default this is disabled. This can be enabled by either by changing below value to true
+@@ -25,45 +26,47 @@ PRODUCT_COPY_FILES += \
+     frameworks/native/data/etc/com.nxp.mifare.xml:system/etc/permissions/com.nxp.mifare.xml \
+     frameworks/native/data/etc/android.hardware.nfc.xml:system/etc/permissions/android.hardware.nfc.xml \
+     frameworks/native/data/etc/android.hardware.se.omapi.ese.xml:system/etc/permissions/android.hardware.se.omapi.ese.xml \
+-    frameworks/native/data/etc/com.android.se.xml:system/etc/permissions/com.android.se.xml \
+     frameworks/native/data/etc/android.software.secure_lock_screen.xml:system/etc/permissions/android.software.secure_lock_screen.xml \
+     frameworks/native/data/etc/android.hardware.device_unique_attestation.xml:system/etc/permissions/android.hardware.device_unique_attestation.xml \
+ 
++#PRODUCT_COPY_FILES += \
++#    frameworks/native/data/etc/com.android.se.xml:system/etc/permissions/com.android.se.xml \
++
+ # NFC config files
+ ifeq ($(NXP_NFC_HW),SN1xx)
+ PRODUCT_COPY_FILES += \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nci.conf:$(TARGET_COPY_OUT_PRODUCT)/etc/libnfc-nci.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp-SN100U_example.conf:vendor/etc/libnfc-nxp.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libese-nxp-P73.conf:vendor/etc/libese-nxp.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp_RF-SN100U_example_IguanaLite.conf:vendor/libnfc-nxp_RF.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/hal_uuid_map_config.xml:vendor/etc/hal_uuid_map_config.xml
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nci.conf:$(TARGET_COPY_OUT_PRODUCT)/etc/libnfc-nci.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp-SN100U_example.conf:vendor/etc/libnfc-nxp.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libese-nxp-P73.conf:vendor/etc/libese-nxp.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp_RF-SN100U_example_IguanaLite.conf:vendor/libnfc-nxp_RF.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/hal_uuid_map_config.xml:vendor/etc/hal_uuid_map_config.xml
+ else ifeq ($(NXP_NFC_HW),SN220)
+ PRODUCT_COPY_FILES += \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nci.conf:$(TARGET_COPY_OUT_PRODUCT)/etc/libnfc-nci.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp-SN220U_example.conf:vendor/etc/libnfc-nxp.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libese-nxp-P73.conf:vendor/etc/libese-nxp.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp_RF-SN220U_example.conf:vendor/libnfc-nxp_RF.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nci.conf:$(TARGET_COPY_OUT_PRODUCT)/etc/libnfc-nci.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp-SN220U_example.conf:vendor/etc/libnfc-nxp.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libese-nxp-P73.conf:vendor/etc/libese-nxp.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp_RF-SN220U_example.conf:vendor/libnfc-nxp_RF.conf \
+     frameworks/native/data/etc/android.hardware.keystore.app_attest_key.xml:system/etc/permissions/android.hardware.keystore.app_attest_key.xml \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/hal_uuid_map_config.xml:vendor/etc/hal_uuid_map_config.xml
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/hal_uuid_map_config.xml:vendor/etc/hal_uuid_map_config.xml
+ else ifeq ($(NXP_NFC_HW),PN557)
+ PRODUCT_COPY_FILES += \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nci.conf:$(TARGET_COPY_OUT_PRODUCT)/etc/libnfc-nci.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp-PN557_example.conf:vendor/etc/libnfc-nxp.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp_RF-PN557_example.conf:vendor/libnfc-nxp_RF.conf
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nci.conf:$(TARGET_COPY_OUT_PRODUCT)/etc/libnfc-nci.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp-PN557_example.conf:vendor/etc/libnfc-nxp.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp_RF-PN557_example.conf:vendor/libnfc-nxp_RF.conf
+ else ifeq ($(NXP_NFC_HW),SN300)
+ PRODUCT_COPY_FILES += \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nci.conf:$(TARGET_COPY_OUT_PRODUCT)/etc/libnfc-nci.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp-SN300U_example.conf:vendor/etc/libnfc-nxp.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libese-nxp-P73.conf:vendor/etc/libese-nxp.conf \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/libnfc-nxp_RF-SN300U_example.conf:vendor/libnfc-nxp_RF.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/fmct-config-files/libnfc-nci.conf:$(TARGET_COPY_OUT_PRODUCT)/etc/libnfc-nci.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/fmct-config-files/libnfc-nxp-SN300U_example.conf:vendor/etc/libnfc-nxp.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/fmct-config-files/libese-nxp-P73.conf:vendor/etc/libese-nxp.conf \
++    vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/fmct-config-files/libnfc-nxp_RF-SN300U_example.conf:vendor/libnfc-nxp_RF.conf \
+     frameworks/native/data/etc/android.hardware.keystore.app_attest_key.xml:system/etc/permissions/android.hardware.keystore.app_attest_key.xml \
+-    vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/$(NXP_NFC_HW)/hal_uuid_map_config.xml:vendor/etc/hal_uuid_map_config.xml
++    #vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/$(NXP_NFC_HW)/hal_uuid_map_config.xml:vendor/etc/hal_uuid_map_config.xml
+ endif
+ 
+ # NFC Init Files
+ PRODUCT_COPY_FILES += \
+-     vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/init.$(NXP_NFC_PLATFORM).nfc.rc:vendor/etc/init/init.$(NXP_NFC_HOST).nfc.rc \
+-     vendor/$(NXP_VENDOR_DIR)/SNxxx/hw/init.$(NXP_NFC_PLATFORM).se.rc:vendor/etc/init/init.$(NXP_NFC_HOST).se.rc \
++     vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/init.$(NXP_NFC_PLATFORM).nfc.rc:vendor/etc/init/init.$(NXP_NFC_HOST).nfc.rc \
++     vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/hw/init.$(NXP_NFC_PLATFORM).se.rc:vendor/etc/init/init.$(NXP_NFC_HOST).se.rc \
+ 
+ # Service packages
+ PRODUCT_PACKAGES += \
+@@ -77,6 +80,7 @@ PRODUCT_PACKAGES += \
+     com.nxp.nfc \
+     com.nxp.osu \
+     com.nxp.sems \
++    nxpnfc_fw_sn300 \
+ 
+ # DTA, WLC & other libraries
+ PRODUCT_PACKAGES += \
+@@ -207,26 +211,26 @@ PRODUCT_COPY_FILES += \
+     frameworks/native/data/etc/android.software.device_id_attestation.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.software.device_id_attestation.xml \
+     frameworks/native/data/etc/handheld_core_hardware.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/handheld_core_hardware.xml
+ 
+-BOARD_SEPOLICY_DIRS += vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy \
+-                       vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/authsecret \
+-                       vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/keymaster \
+-                       vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/keymint \
+-                       vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/nfc \
+-                       vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/se \
+-                       vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/weaver
++BOARD_SEPOLICY_DIRS += vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy \
++                       vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/authsecret \
++                       vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/keymaster \
++                       vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/keymint \
++                       vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/nfc \
++                       vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/se \
++                       vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/weaver
+ 
+ # NXP Specific internal SEPolicy rules.
+-BOARD_SEPOLICY_DIRS += vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/internal/trustedse \
+-                       vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/internal/wiredse \
+-                       vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/internal/nfc \
+-                       vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/internal
++BOARD_SEPOLICY_DIRS += vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/internal/trustedse \
++                       vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/internal/wiredse \
++                       vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/internal/nfc \
++                       vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/internal
+ 
+ ifeq ($(POWER_TRACKER_FEATURE), true)
+ PRODUCT_PACKAGES += android.hardware.power.stats-service.pixel \
+                     power_tracker \
+                     VtsHalPowerStatsTargetNfcTest
+ 
+-BOARD_SEPOLICY_DIRS += vendor/$(NXP_VENDOR_DIR)/SNxxx/sepolicy/nfc/power-tracker
++BOARD_SEPOLICY_DIRS += vendor/$(NXP_VENDOR_NFC_DIR)/SNxxx/sepolicy/nfc/power-tracker
+ BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/powerstats
+ 
+ PRODUCT_SOONG_NAMESPACES += hardware/google/pixel \
+diff --git a/nxp/SNxxx/framework_compatibility_matrix.xml b/nxp/SNxxx/framework_compatibility_matrix.xml
+index 0959621..5816cd6 100644
+--- a/nxp/SNxxx/framework_compatibility_matrix.xml
++++ b/nxp/SNxxx/framework_compatibility_matrix.xml
+@@ -6,7 +6,7 @@
+             <instance>strongbox</instance>
+         </interface>
+     </hal>
+-    <hal format="hidl" optional="true">
++    <!--hal format="hidl" optional="true">
+         <name>android.hardware.secure_element</name>
+         <version>1.2</version>
+         <interface>
+@@ -14,7 +14,7 @@
+             <instance>eSE1</instance>
+             <instance>eSE2</instance>
+         </interface>
+-    </hal>
++    </hal-->
+     <hal format="hidl" optional="true">
+         <name>vendor.nxp.nxpnfc</name>
+         <version>2.0</version>
+@@ -55,4 +55,4 @@
+             <instance>default</instance>
+         </interface>
+     </hal>
+-</compatibility-matrix>
+\ No newline at end of file
++</compatibility-matrix>
+diff --git a/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nci.conf b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nci.conf
+index 568a32f..d6e0a47 100644
+--- a/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nci.conf
++++ b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nci.conf
+@@ -41,7 +41,7 @@ SCREEN_OFF_POWER_STATE=1
+ # NFA_TECHNOLOGY_MASK_B             0x02    /* NFC Technology B             */
+ # NFA_TECHNOLOGY_MASK_F             0x04    /* NFC Technology F             */
+ # NFA_TECHNOLOGY_MASK_ISO15693      0x08    /* Proprietary Technology       */
+-POLLING_TECH_MASK=0x0F
++POLLING_TECH_MASK=0x00
+ 
+ ###############################################################################
+ PRESERVE_STORAGE=0x01
+diff --git a/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp-SN300U_example.conf b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp-SN300U_example.conf
+index ddf1896..0775bdc 100644
+--- a/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp-SN300U_example.conf
++++ b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp-SN300U_example.conf
+@@ -534,5 +534,5 @@ NXP_RESTART_RF_FOR_NFCEE_RECOVERY=1
+ # Enable or Disable DCDC
+ # DCDC Off    0
+ # DCDC On     1
+-NXP_ENABLE_DCDC_ON=1
++NXP_ENABLE_DCDC_ON=0
+ #################################################################################
+diff --git a/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_RF-SN300U_example.conf b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_RF-SN300U_example.conf
+index e851d48..756da31 100644
+--- a/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_RF-SN300U_example.conf
++++ b/nxp/SNxxx/hw/SN300/fmct-config-files/libnfc-nxp_RF-SN300U_example.conf
+@@ -2,7 +2,7 @@
+ # System clock source selection configuration
+ #define CLK_SRC_XTAL       1
+ #define CLK_SRC_PLL        2
+-NXP_SYS_CLK_SRC_SEL=0x02
++NXP_SYS_CLK_SRC_SEL=0x01
+ 
+ ###############################################################################
+ # System clock frequency selection configuration
+diff --git a/nxp/SNxxx/manifest.xml b/nxp/SNxxx/manifest.xml
+index 51a6d2d..656425c 100755
+--- a/nxp/SNxxx/manifest.xml
++++ b/nxp/SNxxx/manifest.xml
+@@ -1,6 +1,5 @@
+ <manifest version="1.0" type="device" >
+-    <!-- > Uncomment this for enabling the NFC HIDL service.
+-    <hal format="hidl">
++    <!--hal format="hidl">
+         <name>android.hardware.nfc</name>
+         <transport>hwbinder</transport>
+         <impl level="generic"></impl>
+@@ -9,7 +8,7 @@
+             <name>INfc</name>
+             <instance>default</instance>
+         </interface>
+-    </hal> -->
++    </hal-->
+     <!-- >
+     <hal format="hidl">
+         <name>android.hardware.nfc</name>
+diff --git a/nxp/SNxxx/manifestEse.xml b/nxp/SNxxx/manifestEse.xml
+index 6254767..a3794b1 100755
+--- a/nxp/SNxxx/manifestEse.xml
++++ b/nxp/SNxxx/manifestEse.xml
+@@ -1,16 +1,24 @@
+ <manifest version="1.0" type="device" >
+-    <hal format="hidl">
++    <hal format="aidl">
++        <name>android.hardware.secure_element</name>
++        <version>1</version>
++        <interface>
++            <name>ISecureElement</name>
++            <instance>eSE2</instance>
++        </interface>
++    </hal>
++    <!--hal format="hidl">
+         <name>android.hardware.secure_element</name>
+         <transport>hwbinder</transport>
+         <impl level="generic"></impl>
+         <version>1.2</version>
+         <interface>
+             <name>ISecureElement</name>
+-<!-- Uncomment this for enabling the SE HIDL service.
+-            <instance>eSE1</instance> -->
++< Uncomment this for enabling the SE HIDL service.
++            <instance>eSE1</instance> >
+             <instance>eSE2</instance>
+         </interface>
+-    </hal>
++    </hal-->
+ <!-- Uncomment this for enabling the SE HIDL service.
+     <hal format="hidl">
+         <name>vendor.nxp.nxpese</name>
+@@ -35,4 +43,4 @@
+     <sepolicy>
+         <version>0.0</version>
+     </sepolicy>
+-</manifest>
+\ No newline at end of file
++</manifest>
+-- 
+2.25.1
+

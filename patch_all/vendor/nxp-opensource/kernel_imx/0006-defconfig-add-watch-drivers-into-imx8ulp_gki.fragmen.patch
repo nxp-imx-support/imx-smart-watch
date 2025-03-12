@@ -1,0 +1,25 @@
+From 061046ead4edfbff5e0f8d3a6893d4e0e25ce7b1 Mon Sep 17 00:00:00 2001
+From: Jason He <jason.he_1@nxp.com>
+Date: Tue, 25 Jun 2024 16:16:16 +0900
+Subject: [PATCH 06/10] defconfig: add watch drivers into imx8ulp_gki.fragment
+
+Signed-off-by: Jason He <jason.he_1@nxp.com>
+---
+ arch/arm64/configs/imx8ulp_gki.fragment | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/arm64/configs/imx8ulp_gki.fragment b/arch/arm64/configs/imx8ulp_gki.fragment
+index 554c3b15dc6c..0707ab9e60fd 100644
+--- a/arch/arm64/configs/imx8ulp_gki.fragment
++++ b/arch/arm64/configs/imx8ulp_gki.fragment
+@@ -66,6 +66,7 @@ CONFIG_DRM_ITE_IT6161=m
+ CONFIG_DRM_IMX_DCNANO=m
+ CONFIG_DRM_PANEL_ROCKTECK_HIMAX8394F=m
+ CONFIG_DRM_PANEL_NXP_RM67162=m
++CONFIG_DRM_PANEL_USMP_RM67162=m
+ CONFIG_MXC_GPU_VIV=m
+ CONFIG_REGULATOR_FP9931=m
+ CONFIG_MFD_FP9931=m
+-- 
+2.25.1
+

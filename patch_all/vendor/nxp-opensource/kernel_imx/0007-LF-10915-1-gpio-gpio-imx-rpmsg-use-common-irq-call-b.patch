@@ -1,0 +1,363 @@
+From d9f7b45ff3a6df9554f1b3199b83488c2de64ee7 Mon Sep 17 00:00:00 2001
+From: Haibo Chen <haibo.chen@nxp.com>
+Date: Thu, 21 Sep 2023 18:30:13 +0800
+Subject: [PATCH 07/10] LF-10915-1 gpio: gpio-imx-rpmsg: use common irq call
+ back to handle the real rpmsg operation
+
+For the mask and unmask, need in irq contex, so can't handle rpmsg
+operation directlly(it may sleep and schedule), the previous method
+use the workqueue, which will trigger the following issue:
+
+BUG: scheduling while atomic
+[  339.548280][    T8]  schedule+0x84/0xf0
+[  339.548294][    T8]  schedule_timeout+0x90/0x12c
+[  339.548316][    T8]  wait_for_common+0xdc/0x1a8
+[  339.548331][    T8]  wait_for_completion_timeout+0x14/0x24
+[  339.548347][    T8]  mbox_send_message+0xc4/0x158
+[  339.548377][    T8]  imx_rproc_kick+0x40/0xac [imx_rproc]
+[  339.548424][    T8]  rproc_virtio_notify+0x40/0x54
+[  339.548446][    T8]  virtqueue_kick+0x104/0x13c
+[  339.548467][    T8]  rpmsg_send_offchannel_raw+0x380/0x438 [virtio_rpmsg_bus]
+[  339.548512][    T8]  virtio_rpmsg_send+0x2c/0x3c [virtio_rpmsg_bus]
+[  339.548554][    T8]  rpmsg_send+0x38/0x5c
+[  339.548567][    T8]  gpio_send_message+0x64/0x14c [gpio_imx_rpmsg]
+[  339.548609][    T8]  imx_rpmsg_irq_set_wake+0x90/0x67c [gpio_imx_rpmsg]
+[  339.548647][    T8]  irq_set_irq_wake+0xac/0x1d8
+[  339.548669][    T8]  max17042_suspend+0x34/0x4c [max17042_battery]
+
+And the irq common code did contain call_backs(bus lock,
+bus_sync_unlock) for slow bus, and can avoid upper issue.
+So switch to irq_bus_lock/irq_bus_sync_unlock.
+
+Currently the gpio set and get share the pin's gpio_rpmsg_data buffer.
+This is not safe when multi user try to handle the same gpio pin.
+
+Take this into consideration. Process A try to set the gpio value.
+after config the nesessary information into the gpio_rpmsg_data, CPU
+schedule to process B. In the same time, Process B try to read the value
+from the same gpio pad. and sucessfull get the return value into the
+pin's gpio_rpmsg_data. Then CPU schedule to Process A, and continue do
+the following thing, but this time, the gpio_rpmsg_data are fulshed by
+porcess B, not the original value.
+
+Though we use mutex lock in gpio_send_message(), but this is not safe
+enough. Need to involve the lock at the every beginning of the gpio
+call back function.
+
+Signed-off-by: Haibo Chen <haibo.chen@nxp.com>
+---
+ drivers/gpio/gpio-imx-rpmsg.c | 167 +++++++++++++++++-----------------
+ 1 file changed, 86 insertions(+), 81 deletions(-)
+
+diff --git a/drivers/gpio/gpio-imx-rpmsg.c b/drivers/gpio/gpio-imx-rpmsg.c
+index dfa7af07745a..76996dadeb6c 100644
+--- a/drivers/gpio/gpio-imx-rpmsg.c
++++ b/drivers/gpio/gpio-imx-rpmsg.c
+@@ -68,6 +68,10 @@ struct gpio_rpmsg_data {
+ } __packed __aligned(8);
+ 
+ struct imx_rpmsg_gpio_pin {
++	u8 irq_shutdown;
++	u8 irq_unmask;
++	u8 irq_mask;
++	u32 irq_wake_enable;
+ 	u32 irq_type;
+ 	struct gpio_rpmsg_data msg;
+ };
+@@ -90,14 +94,6 @@ struct imx_gpio_rpmsg_info {
+ 	struct mutex lock;
+ };
+ 
+-struct imx_rpmsg_gpio_work {
+-	struct gpio_rpmsg_data *msg;
+-	struct imx_rpmsg_gpio_port *port;
+-	struct work_struct rpmsg_send_wq;
+-};
+-
+-static struct imx_rpmsg_gpio_work imx_rpmsg_gpio_send_work;
+-static struct workqueue_struct *imx_rpmsg_gpio_workqueue;
+ static struct imx_gpio_rpmsg_info gpio_rpmsg;
+ 
+ static int gpio_send_message(struct imx_rpmsg_gpio_port *port,
+@@ -113,7 +109,6 @@ static int gpio_send_message(struct imx_rpmsg_gpio_port *port,
+ 		return -EINVAL;
+ 	}
+ 
+-	mutex_lock(&info->lock);
+ 	cpu_latency_qos_add_request(&info->pm_qos_req,
+ 			0);
+ 
+@@ -152,7 +147,6 @@ static int gpio_send_message(struct imx_rpmsg_gpio_port *port,
+ 
+ err_out:
+ 	cpu_latency_qos_remove_request(&info->pm_qos_req);
+-	mutex_unlock(&info->lock);
+ 
+ 	return err;
+ }
+@@ -193,6 +187,8 @@ static int imx_rpmsg_gpio_get(struct gpio_chip *gc, unsigned int gpio)
+ 	struct gpio_rpmsg_data *msg = NULL;
+ 	int ret;
+ 
++	mutex_lock(&gpio_rpmsg.lock);
++
+ 	msg = gpio_get_pin_msg(port, gpio);
+ 	msg->header.cate = IMX_RPMSG_GPIO;
+ 	msg->header.major = IMX_RMPSG_MAJOR;
+@@ -204,7 +200,9 @@ static int imx_rpmsg_gpio_get(struct gpio_chip *gc, unsigned int gpio)
+ 
+ 	ret = gpio_send_message(port, msg, &gpio_rpmsg, true);
+ 	if (!ret)
+-		return !!port->gpio_pins[gpio].msg.in.value;
++		ret = !!port->gpio_pins[gpio].msg.in.value;
++
++	mutex_unlock(&gpio_rpmsg.lock);
+ 
+ 	return ret;
+ }
+@@ -214,6 +212,9 @@ static int imx_rpmsg_gpio_direction_input(struct gpio_chip *gc,
+ {
+ 	struct imx_rpmsg_gpio_port *port = gpiochip_get_data(gc);
+ 	struct gpio_rpmsg_data *msg = NULL;
++	int ret;
++
++	mutex_lock(&gpio_rpmsg.lock);
+ 
+ 	msg = gpio_get_pin_msg(port, gpio);
+ 	msg->header.cate = IMX_RPMSG_GPIO;
+@@ -227,7 +228,11 @@ static int imx_rpmsg_gpio_direction_input(struct gpio_chip *gc,
+ 	msg->out.event = GPIO_RPMSG_TRI_IGNORE;
+ 	msg->in.wakeup = 0;
+ 
+-	return gpio_send_message(port, msg, &gpio_rpmsg, true);
++	ret = gpio_send_message(port, msg, &gpio_rpmsg, true);
++
++	mutex_unlock(&gpio_rpmsg.lock);
++
++	return ret;
+ }
+ 
+ static inline void imx_rpmsg_gpio_direction_output_init(struct gpio_chip *gc,
+@@ -250,9 +255,13 @@ static void imx_rpmsg_gpio_set(struct gpio_chip *gc, unsigned int gpio, int val)
+ 	struct imx_rpmsg_gpio_port *port = gpiochip_get_data(gc);
+ 	struct gpio_rpmsg_data *msg = NULL;
+ 
++	mutex_lock(&gpio_rpmsg.lock);
++
+ 	msg = gpio_get_pin_msg(port, gpio);
+ 	imx_rpmsg_gpio_direction_output_init(gc, gpio, val, msg);
+ 	gpio_send_message(port, msg, &gpio_rpmsg, true);
++
++	mutex_unlock(&gpio_rpmsg.lock);
+ }
+ 
+ static int imx_rpmsg_gpio_direction_output(struct gpio_chip *gc,
+@@ -260,10 +269,17 @@ static int imx_rpmsg_gpio_direction_output(struct gpio_chip *gc,
+ {
+ 	struct imx_rpmsg_gpio_port *port = gpiochip_get_data(gc);
+ 	struct gpio_rpmsg_data *msg = NULL;
++	int ret;
++
++	mutex_lock(&gpio_rpmsg.lock);
+ 
+ 	msg = gpio_get_pin_msg(port, gpio);
+ 	imx_rpmsg_gpio_direction_output_init(gc, gpio, val, msg);
+-	return gpio_send_message(port, msg, &gpio_rpmsg, true);
++	ret = gpio_send_message(port, msg, &gpio_rpmsg, true);
++
++	mutex_unlock(&gpio_rpmsg.lock);
++
++	return ret;
+ }
+ 
+ static int imx_rpmsg_irq_set_type(struct irq_data *d, u32 type)
+@@ -301,42 +317,13 @@ static int imx_rpmsg_irq_set_type(struct irq_data *d, u32 type)
+ static int imx_rpmsg_irq_set_wake(struct irq_data *d, u32 enable)
+ {
+ 	struct imx_rpmsg_gpio_port *port = irq_data_get_irq_chip_data(d);
+-	struct gpio_rpmsg_data *msg = NULL;
+ 	u32 gpio_idx = d->hwirq;
+ 
+-	msg = gpio_get_pin_msg(port, gpio_idx);
+-	msg->header.cate = IMX_RPMSG_GPIO;
+-	msg->header.major = IMX_RMPSG_MAJOR;
+-	msg->header.minor = IMX_RMPSG_MINOR;
+-	msg->header.type = GPIO_RPMSG_SETUP;
+-	msg->header.cmd = GPIO_RPMSG_INPUT_INIT;
+-	msg->pin_idx = gpio_idx;
+-	msg->port_idx = port->idx;
+-
+-	/* set wakeup trigger source,
+-	 * if not set irq type, then use high level as trigger type
+-	 */
+-	msg->out.event = port->gpio_pins[gpio_idx].irq_type;
+-	if (!msg->out.event)
+-		msg->out.event = GPIO_RPMSG_TRI_LOW_LEVEL;
+-
+-	msg->in.wakeup = enable;
+-
+-	/* here should be atomic context */
+-	gpio_send_message(port, msg, &gpio_rpmsg, false);
++	port->gpio_pins[gpio_idx].irq_wake_enable = enable;
+ 
+ 	return 0;
+ }
+ 
+-void imx_rpmsg_gpio_do_send(struct work_struct *w)
+-{
+-	struct imx_rpmsg_gpio_work *gpio_send_work =
+-	       container_of(w, struct imx_rpmsg_gpio_work, rpmsg_send_wq);
+-
+-	gpio_send_message(gpio_send_work->port,
+-			  gpio_send_work->msg, &gpio_rpmsg, false);
+-}
+-
+ /*
+  * This function will be called at:
+  *  - one interrupt setup.
+@@ -348,51 +335,63 @@ void imx_rpmsg_gpio_do_send(struct work_struct *w)
+ static void imx_rpmsg_unmask_irq(struct irq_data *d)
+ {
+ 	struct imx_rpmsg_gpio_port *port = irq_data_get_irq_chip_data(d);
+-	struct gpio_rpmsg_data *msg = NULL;
+ 	u32 gpio_idx = d->hwirq;
+ 
+-	msg = gpio_get_pin_msg(port, gpio_idx);
+-	msg->header.cate = IMX_RPMSG_GPIO;
+-	msg->header.major = IMX_RMPSG_MAJOR;
+-	msg->header.minor = IMX_RMPSG_MINOR;
+-	msg->header.type = GPIO_RPMSG_SETUP;
+-	msg->header.cmd = GPIO_RPMSG_INPUT_INIT;
+-	msg->pin_idx = gpio_idx;
+-	msg->port_idx = port->idx;
+-
+-	/*
+-	 * set wakeup trigger source,
+-	 * if not set irq type, then use high level as trigger type
+-	 */
+-	msg->out.event = port->gpio_pins[gpio_idx].irq_type;
+-	if (!msg->out.event)
+-		msg->out.event = GPIO_RPMSG_TRI_LOW_LEVEL;
+-
+-	msg->in.wakeup = 0;
+-
+-	imx_rpmsg_gpio_send_work.msg = msg;
+-	imx_rpmsg_gpio_send_work.port = port;
+-
+-	queue_work(imx_rpmsg_gpio_workqueue, &(imx_rpmsg_gpio_send_work.rpmsg_send_wq));
++	port->gpio_pins[gpio_idx].irq_unmask = 1;
+ }
+ 
+ static void imx_rpmsg_mask_irq(struct irq_data *d)
+ {
++	struct imx_rpmsg_gpio_port *port = irq_data_get_irq_chip_data(d);
++	u32 gpio_idx = d->hwirq;
+ 	/*
+ 	 * No need to implement the callback at A core side.
+ 	 * M core will mask interrupt after a interrupt occurred, and then
+ 	 * sends a notify to A core.
+ 	 * After A core dealt with the notify, A core will send a rpmsg to
+-	 * M core to enable this interrupt again.
++	 * M core to unmask this interrupt again.
+ 	 */
++	port->gpio_pins[gpio_idx].irq_mask = 1;
+ }
+ 
+ static void imx_rpmsg_irq_shutdown(struct irq_data *d)
++{
++	struct imx_rpmsg_gpio_port *port = irq_data_get_irq_chip_data(d);
++	u32 gpio_idx = d->hwirq;
++
++	port->gpio_pins[gpio_idx].irq_shutdown = 1;
++}
++
++static void imx_rpmsg_irq_bus_lock(struct irq_data *d)
++{
++	mutex_lock(&gpio_rpmsg.lock);
++}
++
++static void imx_rpmsg_irq_bus_sync_unlock(struct irq_data *d)
+ {
+ 	struct imx_rpmsg_gpio_port *port = irq_data_get_irq_chip_data(d);
+ 	struct gpio_rpmsg_data *msg = NULL;
+ 	u32 gpio_idx = d->hwirq;
+ 
++	if (port == NULL) {
++		mutex_unlock(&gpio_rpmsg.lock);
++		return;
++	}
++
++	/*
++	 * For mask irq, do nothing here.
++	 * M core will mask interrupt after a interrupt occurred, and then
++	 * sends a notify to A core.
++	 * After A core dealt with the notify, A core will send a rpmsg to
++	 * M core to unmask this interrupt again.
++	 */
++
++	if (port->gpio_pins[gpio_idx].irq_mask && !port->gpio_pins[gpio_idx].irq_unmask) {
++		mutex_unlock(&gpio_rpmsg.lock);
++		port->gpio_pins[gpio_idx].irq_mask = 0;
++		return;
++	}
++
+ 	msg = gpio_get_pin_msg(port, gpio_idx);
+ 	msg->header.cate = IMX_RPMSG_GPIO;
+ 	msg->header.major = IMX_RMPSG_MAJOR;
+@@ -402,14 +401,24 @@ static void imx_rpmsg_irq_shutdown(struct irq_data *d)
+ 	msg->pin_idx = gpio_idx;
+ 	msg->port_idx = port->idx;
+ 
+-	/* Disable interrupt here */
+-	msg->out.event = GPIO_RPMSG_TRI_IGNORE;
+-	msg->in.wakeup = 0;
+-
+-	imx_rpmsg_gpio_send_work.msg = msg;
+-	imx_rpmsg_gpio_send_work.port = port;
++	if (port->gpio_pins[gpio_idx].irq_shutdown) {
++		msg->out.event = GPIO_RPMSG_TRI_IGNORE;
++		msg->in.wakeup = 0;
++		port->gpio_pins[gpio_idx].irq_shutdown = 0;
++	} else {
++		 /* if not set irq type, then use low level as trigger type */
++		msg->out.event = port->gpio_pins[gpio_idx].irq_type;
++		if (!msg->out.event)
++			msg->out.event = GPIO_RPMSG_TRI_LOW_LEVEL;
++		if (port->gpio_pins[gpio_idx].irq_unmask) {
++			msg->in.wakeup = 0;
++			port->gpio_pins[gpio_idx].irq_unmask = 0;
++		} else /* irq set wake */
++			msg->in.wakeup = port->gpio_pins[gpio_idx].irq_wake_enable;
++	}
+ 
+-	queue_work(imx_rpmsg_gpio_workqueue, &(imx_rpmsg_gpio_send_work.rpmsg_send_wq));
++	gpio_send_message(port, msg, &gpio_rpmsg, false);
++	mutex_unlock(&gpio_rpmsg.lock);
+ }
+ 
+ static struct irq_chip imx_rpmsg_irq_chip = {
+@@ -418,7 +427,8 @@ static struct irq_chip imx_rpmsg_irq_chip = {
+ 	.irq_set_wake = imx_rpmsg_irq_set_wake,
+ 	.irq_set_type = imx_rpmsg_irq_set_type,
+ 	.irq_shutdown = imx_rpmsg_irq_shutdown,
+-	/* TBD: Add .irq_disable support */
++	.irq_bus_lock = imx_rpmsg_irq_bus_lock,
++	.irq_bus_sync_unlock = imx_rpmsg_irq_bus_sync_unlock,
+ };
+ 
+ static int imx_rpmsg_gpio_probe(struct platform_device *pdev)
+@@ -477,11 +487,6 @@ static int imx_rpmsg_gpio_probe(struct platform_device *pdev)
+ 		irq_set_probe(i);
+ 	}
+ 
+-	imx_rpmsg_gpio_workqueue = create_workqueue("imx_rpmsg_gpio_workqueue");
+-	if (!imx_rpmsg_gpio_workqueue)
+-		dev_err(&pdev->dev, "Failed to create imx_rpmsg_gpio_workqueue\n");
+-	INIT_WORK(&(imx_rpmsg_gpio_send_work.rpmsg_send_wq), imx_rpmsg_gpio_do_send);
+-
+ 	return 0;
+ }
+ static const struct of_device_id imx_rpmsg_gpio_dt_ids[] = {
+-- 
+2.25.1
+

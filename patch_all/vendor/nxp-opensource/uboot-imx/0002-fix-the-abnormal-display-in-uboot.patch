@@ -1,0 +1,26 @@
+From 7f8398f8619b5a939e741b733e5ff502a9684f02 Mon Sep 17 00:00:00 2001
+From: "jason.he" <jason.he_1@nxp.com>
+Date: Wed, 19 Jul 2023 14:11:44 +0000
+Subject: [PATCH 2/2] fix the abnormal display in uboot
+
+Signed-off-by: jason.he <jason.he_1@nxp.com>
+---
+ arch/arm/mach-imx/imx8ulp/clock.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm/mach-imx/imx8ulp/clock.c b/arch/arm/mach-imx/imx8ulp/clock.c
+index 886404c9395..f064e6a5182 100644
+--- a/arch/arm/mach-imx/imx8ulp/clock.c
++++ b/arch/arm/mach-imx/imx8ulp/clock.c
+@@ -379,7 +379,7 @@ void enable_mipi_dsi_clk(unsigned char enable)
+ 		pcc_clock_enable(5, DSI_PCC5_SLOT, false);
+ 		pcc_reset_peripheral(5, DSI_PCC5_SLOT, true);
+ 		pcc_clock_sel(5, DSI_PCC5_SLOT, PLL4_PFD1_DIV2);
+-		pcc_clock_div_config(5, DSI_PCC5_SLOT, 0, 6);
++		pcc_clock_div_config(5, DSI_PCC5_SLOT, 0, 4);
+ 		pcc_clock_enable(5, DSI_PCC5_SLOT, true);
+ 		pcc_reset_peripheral(5, DSI_PCC5_SLOT, false);
+ 	} else {
+-- 
+2.25.1
+

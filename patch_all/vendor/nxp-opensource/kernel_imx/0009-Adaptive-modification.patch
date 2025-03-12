@@ -1,0 +1,129 @@
+From 7ca1413356159257b87e0cb6e9d12a7fa4bc6e5d Mon Sep 17 00:00:00 2001
+From: Jason He <jason.he_1@nxp.com>
+Date: Wed, 13 Nov 2024 16:52:54 +0900
+Subject: [PATCH 09/10] Adaptive modification
+
+1, Support NFC, ESE on watch_8ulp
+2, Add DYNAMIC_DEBUG_MODULE in elants
+
+Signed-off-by: Jason He <jason.he_1@nxp.com>
+---
+ .../boot/dts/freescale/imx8ulp-watch.dts      | 61 +++++++++++++++++++
+ drivers/input/touchscreen/elants_i2c.c        |  1 +
+ 2 files changed, 62 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/freescale/imx8ulp-watch.dts b/arch/arm64/boot/dts/freescale/imx8ulp-watch.dts
+index c55afeb9eeff..d90b777c20b8 100644
+--- a/arch/arm64/boot/dts/freescale/imx8ulp-watch.dts
++++ b/arch/arm64/boot/dts/freescale/imx8ulp-watch.dts
+@@ -332,6 +332,23 @@ &mu 1 1
+ 	status = "okay";
+ };
+ 
++&lpspi4 {
++	fsl,spi-num-chipselects = <1>;
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&pinctrl_lpspi4>;
++	pinctrl-1 = <&pinctrl_lpspi4>;
++	cs-gpios = <&gpiod 23 GPIO_ACTIVE_LOW>;
++	status = "okay";
++
++	p61@0 {
++		compatible = "nxp,p61";
++		reg = <0>;
++		spi-max-frequency = <1000000>;
++		// nxp,p61-rst = <&rpmsg_gpioc 13 GPIO_ACTIVE_HIGH>;
++		nxp,nfcc = "7-0028";
++	};
++};
++
+ &lpuart5 {
+ 	/* console */
+ 	pinctrl-names = "default", "sleep";
+@@ -348,6 +365,28 @@ &lpuart7 {
+ 	status = "okay";
+ };
+ 
++
++&lpi2c7 {
++	#address-cells = <1>;
++	#size-cells = <0>;
++	clock-frequency = <400000>;
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&pinctrl_lpi2c7>;
++	pinctrl-1 = <&pinctrl_lpi2c7>;
++	status = "okay";
++
++	sn-i2c@28 {
++		compatible = "nxp,sn-nci";
++		reg = <0x28>;
++		interrupt-parent = <&gpioe>;
++		interrupts = <7 IRQ_TYPE_LEVEL_HIGH>;
++		nxp,sn-irq = <&gpioe 7 GPIO_ACTIVE_HIGH>;
++		nxp,sn-ven-rstn = <&rpmsg_gpioc 14 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pinctrl_sn_i2c_gpio>;
++	};
++};
++
+ &mu {
+ 	status = "okay";
+ };
+@@ -427,6 +466,16 @@ &ele_mu {
+ };
+ 
+ &iomuxc1 {
++	pinctrl_lpspi4: lpspi4grp {
++		fsl,pins = <
++			MX8ULP_PAD_PTD20__LPSPI4_SIN    0x43
++			MX8ULP_PAD_PTD21__LPSPI4_SOUT   0x43
++			MX8ULP_PAD_PTD22__LPSPI4_SCK    0x43
++			MX8ULP_PAD_PTD23__PTD23     0x43
++			MX8ULP_PAD_PTD16__PTD16     0x43
++		>;
++	};
++
+ 	pinctrl_lpuart5: lpuart5grp {
+ 		fsl,pins = <
+ 			MX8ULP_PAD_PTF14__LPUART5_TX	0x3
+@@ -443,6 +492,13 @@ MX8ULP_PAD_PTF20__LPUART7_CTS_B 0x3
+ 		>;
+ 	};
+ 
++	pinctrl_lpi2c7: lpi2c7grp {
++		fsl,pins = <
++			MX8ULP_PAD_PTF4__LPI2C7_SCL	0x20
++			MX8ULP_PAD_PTF5__LPI2C7_SDA	0x20
++		>;
++	};
++
+ 	pinctrl_otgid1: usb1grp {
+ 		fsl,pins = <
+ 			MX8ULP_PAD_PTE16__USB0_ID	0x10003
+@@ -493,6 +549,11 @@ MX8ULP_PAD_PTF26__PTF26 	0x3
+ 		>;
+ 	};
+ 
++	pinctrl_sn_i2c_gpio: sn {
++		fsl,pins = <
++			MX8ULP_PAD_PTE7__PTE7   0x0
++		>;
++	};
+ };
+ 
+ &epxp {
+diff --git a/drivers/input/touchscreen/elants_i2c.c b/drivers/input/touchscreen/elants_i2c.c
+index 217c6d696ad6..3030fb9cb666 100644
+--- a/drivers/input/touchscreen/elants_i2c.c
++++ b/drivers/input/touchscreen/elants_i2c.c
+@@ -18,6 +18,7 @@
+  * Copyright (c) 2012 Red Hat, Inc
+  */
+ 
++#define DYNAMIC_DEBUG_MODULE
+ 
+ #include <linux/bits.h>
+ #include <linux/module.h>
+-- 
+2.25.1
+

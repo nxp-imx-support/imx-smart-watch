@@ -1,0 +1,29 @@
+From 17c2da3d6007f8f039efc878e50b382ec27e0a37 Mon Sep 17 00:00:00 2001
+From: "Jason.He" <jason.he_1@nxp.com>
+Date: Fri, 29 Dec 2023 16:32:41 +0800
+Subject: [PATCH 2/2] Support for watch_8ulp
+
+1, Add Sensor nodes (step_count & heart_rate) permissions
+
+Change-Id: Ia361243945a45d364e041621991c04d1d299b2ff
+Signed-off-by: Jason.He <jason.he_1@nxp.com>
+---
+ imx8ulp/watch_8ulp/ueventd.nxp.rc | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/imx8ulp/watch_8ulp/ueventd.nxp.rc b/imx8ulp/watch_8ulp/ueventd.nxp.rc
+index 2a52d65a..9f12e12c 100644
+--- a/imx8ulp/watch_8ulp/ueventd.nxp.rc
++++ b/imx8ulp/watch_8ulp/ueventd.nxp.rc
+@@ -30,5 +30,8 @@
+ # iio sensor sysfs properities
+ /dev/iio:device*                                                     0660    system     system
+ /sys/bus/iio/devices/iio:device*    in_steps_en                      0660    system     system
++/sys/bus/iio/devices/iio:device*    in_activity_en                   0660    system     system
+ /sys/bus/iio/devices/iio:device*    events/in_steps_change_period    0660    system     system
+ /sys/bus/iio/devices/iio:device*    events/in_steps_change_value     0660    system     system
++/sys/bus/iio/devices/iio:device*    in_count_en                      0660    system     system
++/sys/bus/iio/devices/iio:device*    events/in_count_change_value     0660    system     system
+-- 
+2.25.1
+
