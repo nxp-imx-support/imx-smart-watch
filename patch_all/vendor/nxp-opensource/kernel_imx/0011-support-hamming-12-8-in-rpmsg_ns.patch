@@ -1,0 +1,148 @@
+From cb6d3f3ccd2573cf420a67cb75d34272973f10f9 Mon Sep 17 00:00:00 2001
+From: Jason He <jason.he_1@nxp.com>
+Date: Thu, 6 Nov 2025 14:55:53 +0900
+Subject: [PATCH 1/2] support hamming(12,8) in rpmsg_ns
+
+Signed-off-by: Jason He <jason.he_1@nxp.com>
+---
+ drivers/rpmsg/rpmsg_ns.c        | 89 +++++++++++++++++++++++++++++++--
+ include/linux/mod_devicetable.h |  2 +-
+ 2 files changed, 86 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/rpmsg/rpmsg_ns.c b/drivers/rpmsg/rpmsg_ns.c
+index c70ad03ff2e9..ffbbc4a771cb 100644
+--- a/drivers/rpmsg/rpmsg_ns.c
++++ b/drivers/rpmsg/rpmsg_ns.c
+@@ -11,6 +11,78 @@
+ 
+ #include "rpmsg_internal.h"
+ 
++// Encode 8-bit data into 12-bit Hamming code (stored in a short)
++short hamming_encode_12_8(char data) {
++    short codeword = 0;
++    int d[8], p1, p2, p4, p8;
++
++    // Extract individual bits from the input data
++    for (int i = 0; i < 8; i++) {
++        d[i] = (data >> i) & 1;
++    }
++
++    // Place data bits into codeword at positions 3,5,6,7,9,10,11,12
++    if (d[0]) codeword |= (1 << 2);
++    if (d[1]) codeword |= (1 << 4);
++    if (d[2]) codeword |= (1 << 5);
++    if (d[3]) codeword |= (1 << 6);
++    if (d[4]) codeword |= (1 << 8);
++    if (d[5]) codeword |= (1 << 9);
++    if (d[6]) codeword |= (1 << 10);
++    if (d[7]) codeword |= (1 << 11);
++
++    // Calculate parity bits for positions 1,2,4,8
++    p1 = ((codeword >> 2) & 1) ^ ((codeword >> 4) & 1) ^ ((codeword >> 6) & 1) ^ ((codeword >> 8) & 1) ^ ((codeword >> 10) & 1);
++    p2 = ((codeword >> 2) & 1) ^ ((codeword >> 5) & 1) ^ ((codeword >> 6) & 1) ^ ((codeword >> 9) & 1) ^ ((codeword >> 10) & 1);
++    p4 = ((codeword >> 4) & 1) ^ ((codeword >> 5) & 1) ^ ((codeword >> 6) & 1) ^ ((codeword >> 11) & 1);
++    p8 = ((codeword >> 8) & 1) ^ ((codeword >> 9) & 1) ^ ((codeword >> 10) & 1) ^ ((codeword >> 11) & 1);
++
++    // Set parity bits in codeword
++    if (p1) codeword |= (1 << 0);
++    if (p2) codeword |= (1 << 1);
++    if (p4) codeword |= (1 << 3);
++    if (p8) codeword |= (1 << 7);
++
++    return codeword;
++}
++
++// Decode 12-bit Hamming codeword into original 8-bit data
++char hamming_decode_12_8(short codeword, int *error_detected) {
++    // Calculate syndrome bits to detect error position
++    int s1 = ((codeword >> 0) & 1) ^ ((codeword >> 2) & 1) ^ ((codeword >> 4) & 1) ^ ((codeword >> 6) & 1) ^ ((codeword >> 8) & 1) ^ ((codeword >> 10) & 1);
++    int s2 = ((codeword >> 1) & 1) ^ ((codeword >> 2) & 1) ^ ((codeword >> 5) & 1) ^ ((codeword >> 6) & 1) ^ ((codeword >> 9) & 1) ^ ((codeword >> 10) & 1);
++    int s4 = ((codeword >> 3) & 1) ^ ((codeword >> 4) & 1) ^ ((codeword >> 5) & 1) ^ ((codeword >> 6) & 1) ^ ((codeword >> 11) & 1);
++    int s8 = ((codeword >> 7) & 1) ^ ((codeword >> 8) & 1) ^ ((codeword >> 9) & 1) ^ ((codeword >> 10) & 1) ^ ((codeword >> 11) & 1);
++
++    int error_pos = s8 * 8 + s4 * 4 + s2 * 2 + s1;
++
++	char data = 0;
++
++    // If error detected, correct the bit
++    if (error_pos != 0 && error_pos <= 12) {
++        if (error_detected != NULL) {
++			*error_detected = error_pos;
++		}
++        codeword ^= (1 << (error_pos - 1));
++    } else {
++		if (error_detected != NULL) {
++			*error_detected = 0;
++		}
++	}
++
++    // Extract original data bits from codeword
++    if ((codeword >> 2) & 1) data |= (1 << 0);
++    if ((codeword >> 4) & 1) data |= (1 << 1);
++    if ((codeword >> 5) & 1) data |= (1 << 2);
++    if ((codeword >> 6) & 1) data |= (1 << 3);
++    if ((codeword >> 8) & 1) data |= (1 << 4);
++    if ((codeword >> 9) & 1) data |= (1 << 5);
++    if ((codeword >> 10) & 1) data |= (1 << 6);
++    if ((codeword >> 11) & 1) data |= (1 << 7);
++
++    return data;
++}
++
+ /**
+  * rpmsg_ns_register_device() - register name service device based on rpdev
+  * @rpdev: prepared rpdev to be used for creating endpoints
+@@ -35,7 +107,8 @@ static int rpmsg_ns_cb(struct rpmsg_device *rpdev, void *data, int len,
+ 	struct rpmsg_device *newch;
+ 	struct rpmsg_channel_info chinfo;
+ 	struct device *dev = rpdev->dev.parent;
+-	int ret;
++	int ret, i, err;
++	char decoded_name[RPMSG_NAME_SIZE] = {0};
+ 
+ #if defined(CONFIG_DYNAMIC_DEBUG)
+ 	dynamic_hex_dump("NS announcement: ", DUMP_PREFIX_NONE, 16, 1,
+@@ -47,16 +120,24 @@ static int rpmsg_ns_cb(struct rpmsg_device *rpdev, void *data, int len,
+ 		return -EINVAL;
+ 	}
+ 
++	for (i = 0; i < RPMSG_NAME_SIZE / 2; i++) {
++		short encoded_char = *((short*)&msg->name[i * 2]);
++		decoded_name[i] = hamming_decode_12_8(encoded_char, &err);
++		if (err != 0) {
++			dev_err(dev, "%dth byte err\n", i);
++		}
++	}
++
+ 	/* don't trust the remote processor for null terminating the name */
+-	msg->name[RPMSG_NAME_SIZE - 1] = '\0';
++	decoded_name[RPMSG_NAME_SIZE / 2 - 1] = '\0';
+ 
+-	strncpy(chinfo.name, msg->name, sizeof(chinfo.name));
++	strncpy(chinfo.name, decoded_name, sizeof(chinfo.name));
+ 	chinfo.src = RPMSG_ADDR_ANY;
+ 	chinfo.dst = rpmsg32_to_cpu(rpdev, msg->addr);
+ 
+ 	dev_info(dev, "%sing channel %s addr 0x%x\n",
+ 		 rpmsg32_to_cpu(rpdev, msg->flags) & RPMSG_NS_DESTROY ?
+-		 "destroy" : "creat", msg->name, chinfo.dst);
++		 "destroy" : "creat", decoded_name, chinfo.dst);
+ 
+ 	if (rpmsg32_to_cpu(rpdev, msg->flags) & RPMSG_NS_DESTROY) {
+ 		ret = rpmsg_release_channel(rpdev, &chinfo);
+diff --git a/include/linux/mod_devicetable.h b/include/linux/mod_devicetable.h
+index 549590e9c644..3ef03872470e 100644
+--- a/include/linux/mod_devicetable.h
++++ b/include/linux/mod_devicetable.h
+@@ -448,7 +448,7 @@ struct hv_vmbus_device_id {
+ 
+ /* rpmsg */
+ 
+-#define RPMSG_NAME_SIZE			32
++#define RPMSG_NAME_SIZE			64
+ #define RPMSG_DEVICE_MODALIAS_FMT	"rpmsg:%s"
+ 
+ struct rpmsg_device_id {
+-- 
+2.34.1
+
